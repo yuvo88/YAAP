@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/glamour"
 )
 
 type ChatInteraction struct {
@@ -29,6 +31,13 @@ func (self History) GetHistoryForModel() string {
 	}
 
 	return history.String()
+}
+func (self History) PrintHistory(renderer *glamour.TermRenderer) {
+	for _, interaction := range self.Interactions {
+		fmt.Printf("> %s\n", interaction.Question)
+		markdown, _ := renderer.Render(interaction.Answer)
+		fmt.Println(markdown)
+	}
 
 }
 

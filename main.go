@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,17 +12,45 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"database/sql"
+
 	markdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/charmbracelet/glamour"
+	"github.com/PuerkitoBio/goquery"
+	"github.com/google/uuid"
+	_ "github.com/mattn/go-sqlite3"
 )
+
+const memories_db_name string = ".memories.db"
+const memories_directory_name string = ".memories"
 
 type Settings struct {
 	Model      string
 	OllamaUrl  string
 	SearxNGUrl string
+}
+
+type State struct {
+	Settings      Settings
+	OperatingMode OperatingMode
+	History       History
+	Remember      bool
+	Database      *sql.DB
+	Renderer      *glamour.TermRenderer
+}
+
+func NewState(settings Settings, database *sql.DB, renderer *glamour.TermRenderer) *State {
+	return &State{
+		Settings:      settings,
+		OperatingMode: Auto,
+		Remember:      true,
+		Database:      database,
+		Renderer:      renderer,
+	}
 }
 
 func getRequest(client *http.Client, link string) string {
@@ -33,7 +62,6 @@ func getRequest(client *http.Client, link string) string {
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br, zstd")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Pragma", "no-cache")
@@ -76,7 +104,6 @@ func searxSearch(client *http.Client, baseURL, q string, page_number int) (strin
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br, zstd")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Pragma", "no-cache")
@@ -96,8 +123,11 @@ func searxSearch(client *http.Client, baseURL, q string, page_number int) (strin
 	if err != nil {
 		return "", err
 	}
+	html := string(bodyBytes)
+	doc, _ := goquery.NewDocumentFromReader(strings.NewReader(html))
+	parsed, _ := doc.Find("#urls").First().Html()
 
-	markdown, err := markdown.ConvertString(string(bodyBytes))
+	markdown, err := markdown.ConvertString(parsed)
 	if err != nil {
 		return "", err
 	}
@@ -141,29 +171,11 @@ func ollamaGenerate(ctx context.Context, client *http.Client, baseURL, model, sy
 	return strings.TrimSpace(out.Response), nil
 }
 
-func writeToFile(prompt string) {
-	file, err := os.OpenFile("prompts.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return
-	}
-
-	defer file.Close()
-
-	content := []byte(prompt)
-	_, err = file.Write(content)
-	if err != nil {
-		return
-	}
-
-}
-
 func callLLM(model_settings Settings, prompt string, system string) string {
 	client := &http.Client{}
 	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
 	defer cancelLLM()
 	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.Model, system, prompt)
-	writeToFile(prompt)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)
@@ -171,18 +183,21 @@ func callLLM(model_settings Settings, prompt string, system string) string {
 
 	return answer
 }
-func researchMode(model_settings Settings, question string, history History) (string, string) {
+func researchMode(state *State, question string) (string, string) {
+	month := time.Now().Month().String()
+	year := time.Now().Year()
 	client := &http.Client{}
 
 	queries_string := strings.Split(callLLM(
-		model_settings,
-		buildPrompt(question, "", history),
-		`You answer quickly and accurately.
+		state.Settings,
+		buildPrompt(question, "", state.History),
+		fmt.Sprintf(`You answer quickly and accurately.
 		Rules:
 		- Your job is to turn a question into google searches
+		- The current date is %s %d if the user asks about something happening now
 		- You reply with between 1 and 3 short google queries separated by a newline character
 		- Keep the queries short ( between 3 to 5 words )
-		`), "\n")
+		`, month, year)), "\n")
 
 	var queries strings.Builder
 
@@ -191,13 +206,13 @@ func researchMode(model_settings Settings, question string, history History) (st
 		if trimmed == "" {
 			continue
 		}
-		result, _ := searxSearch(client, model_settings.SearxNGUrl, query, 1)
+		result, _ := searxSearch(client, state.Settings.SearxNGUrl, query, 1)
 		fmt.Fprintf(&queries, "%s", result)
 	}
 
 	links_string := callLLM(
-		model_settings,
-		buildPrompt(question, queries.String(), history),
+		state.Settings,
+		buildPrompt(question, queries.String(), state.History),
 		fmt.Sprintf(
 			`You answer quickly and accurately using the provided markdown web snippets.
 			Rules:
@@ -205,7 +220,7 @@ func researchMode(model_settings Settings, question string, history History) (st
 			- Respond with 1-5 links that the most relavant to the users question and closest to %s %d
 			- Please make sure that you cover all parts of the user's question with the links you provide
 			- Only return links separated by newline characters nothing else
-			`, time.Now().Month().String(), time.Now().Year(),
+			`, month, year,
 		),
 	)
 	links := strings.Split(links_string, "\n")
@@ -222,8 +237,8 @@ func researchMode(model_settings Settings, question string, history History) (st
 	}
 
 	return callLLM(
-		model_settings,
-		buildPrompt(question, sb.String(), history),
+		state.Settings,
+		buildPrompt(question, sb.String(), state.History),
 		`You answer quickly and accurately using the provided markdown web pages.
 		Rules:
 		- Please **always provide a link** to the web page that you got your information from.
@@ -231,23 +246,28 @@ func researchMode(model_settings Settings, question string, history History) (st
 		- Use the provided links and fetched pages as context
 		- If you see information not relavant to the question in the page please disregard it
 		- Only reply to the user's question
+		- Respond with information closest to %s %d
+		- Look for dates in provided pages and specify it in your response
 		- Please provide the exact answer for the user's question according to the markdown web pages provided, not suggestions to how the user can figure out the answer by themselves.
 		- If you don't find the answer in the provided pages please say so explicitly.
 		- You always respond in markdown
 		`,
 	), links_string
 }
-func lookupMode(model_settings Settings, question string, history History) string {
+func lookupMode(state *State, question string) string {
+	month := time.Now().Month().String()
+	year := time.Now().Year()
 	client := &http.Client{}
 	google_queries_string := callLLM(
-		model_settings,
-		buildPrompt(question, "", history),
-		`You answer quickly and accurately.
+		state.Settings,
+		buildPrompt(question, "", state.History),
+		fmt.Sprintf(`You answer quickly and accurately.
 		Rules:
 		- Your job is to turn a question into google searches
+		- The current date is %s %d if the user asks about something happening now
 		- You reply with between 1 and 10 short google queries separated by a newline character
 		- Keep the queries short ( between 3 to 5 words )
-		`)
+		`, month, year))
 
 	lines := strings.Split(google_queries_string, "\n")
 
@@ -259,7 +279,7 @@ func lookupMode(model_settings Settings, question string, history History) strin
 			continue
 		}
 
-		result, err := searxSearch(client, model_settings.SearxNGUrl, query, 1)
+		result, err := searxSearch(client, state.Settings.SearxNGUrl, query, 1)
 
 		if err != nil {
 			fmt.Println("search failed for query:", query, err)
@@ -269,17 +289,18 @@ func lookupMode(model_settings Settings, question string, history History) strin
 	}
 
 	return callLLM(
-		model_settings,
-		buildPrompt(question, sb.String(), history),
-		`You answer quickly and accurately using the provided markdown web snippets.
+		state.Settings,
+		buildPrompt(question, sb.String(), state.History),
+		fmt.Sprintf(`You answer quickly and accurately using the provided markdown web snippets.
 		Rules:
 		- Please **always provide a link** to the article that you got your information from.
 		- Please **always cite your sources**
+		- Respond with information closest to %s %d
 		- Use the provided original queries and responses as context
 		- Please provide the exact answer for the user's question according to the markdown web snippets provided, not suggestions to how the user can figure out the answer by themselves.
 		- If you don't find the answer in the provided markdown web snippets please say so explicitly.
 		- You always respond in markdown
-		`,
+		`, month, year),
 	)
 }
 
@@ -292,25 +313,29 @@ const (
 	Search
 )
 
-func getMode(question string) (OperatingMode, bool) {
+func changeMode(state *State, question string) bool {
 	if question == "/research" {
 		fmt.Println("Switched to research mode")
-		return Research, true
+		state.OperatingMode = Research
+		return true
 	}
 	if question == "/auto" {
 		fmt.Println("Switched to auto mode")
-		return Auto, true
+		state.OperatingMode = Auto
+		return true
 	}
 	if question == "/search" {
 		fmt.Println("Switched to search mode")
-		return Search, true
+		state.OperatingMode = Search
+		return true
 	}
 	if question == "/simple" {
 		fmt.Println("Switched to simple mode")
-		return Simple, true
+		state.OperatingMode = Simple
+		return true
 	}
 
-	return -1, false
+	return false
 }
 
 func buildPrompt(prompt string, context string, history History) string {
@@ -322,6 +347,117 @@ func buildPrompt(prompt string, context string, history History) string {
 		[question]
 		%s
 	`, history.GetHistoryForModel(), context, prompt)
+}
+func saveHistory(state *State) {
+	fmt.Println("Saving history!")
+	dir := memories_directory_name
+	id := uuid.New().String()
+
+	file_path := filepath.Join(dir, id)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		panic("")
+	}
+
+	file, err := os.Create(file_path)
+	if err != nil {
+		panic("")
+	}
+
+	defer file.Close()
+
+	encoder := gob.NewEncoder(file)
+
+	if err := encoder.Encode(state.History); err != nil {
+		panic("")
+	}
+	_, err = state.Database.Exec("INSERT INTO memories (id, title, updated) VALUES (?, ?, ?)", id, state.History.Title, time.Now().Unix())
+	if err != nil {
+		panic("")
+	}
+}
+func forgetHistory(state *State) {
+	fmt.Println("Forgetting!")
+	state.Remember = false
+	state.History.Interactions = []ChatInteraction{}
+	state.History.Title = ""
+}
+func rememberHistory(state *State) {
+	fmt.Println("Remembering!")
+	state.Remember = true
+}
+
+type Memory struct {
+	Id      string
+	Title   string
+	Updated string
+}
+
+func listMemories(database *sql.DB) {
+	rows, err := database.Query("SELECT * FROM memories ORDER BY updated")
+
+	if err != nil {
+		panic("")
+	}
+	defer rows.Close()
+	var memories []Memory
+	for rows.Next() {
+		var memory Memory
+		if err := rows.Scan(&memory.Id, &memory.Title, &memory.Updated); err != nil {
+			panic("")
+		}
+
+		memories = append(memories, memory)
+
+	}
+
+	if err := rows.Err(); err != nil {
+		panic("")
+	}
+	for _, memory := range memories {
+		fmt.Printf("%s | %s | %s\n", memory.Id, memory.Title, memory.Updated)
+	}
+
+}
+
+func loadMemory(state *State, memory_id string) {
+
+	file_path := filepath.Join(memories_directory_name, memory_id)
+	file, _ := os.Open(file_path)
+	defer file.Close()
+
+	decoder := gob.NewDecoder(file)
+
+	var history History
+
+	err := decoder.Decode(&history)
+	if err != nil {
+		fmt.Println("Memory not found")
+	}
+	state.History = history
+	state.History.PrintHistory(state.Renderer)
+}
+
+func initDb() *sql.DB {
+	db, err := sql.Open("sqlite3", memories_db_name)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS memories (
+			id TEXT PRIMARY KEY,
+			title TEXT NOT NULL,
+			updated INTEGER NOT NULL
+		)`,
+	)
+
+	if err != nil {
+
+		panic(err)
+
+	}
+
+	return db
 }
 
 func main() {
@@ -340,16 +476,36 @@ func main() {
 		getenv("OLLAMA_URL", "http://localhost:11434"),
 		"The link to the ollama server",
 	)
-	model_settings := Settings{
+	list_memories := flag.Bool(
+		"list-memories",
+		false,
+		"Should list memories",
+	)
+	load_memory := flag.String(
+		"load-memory",
+		"",
+		"Memory id of memory to load from the list of memories. (--list-memories to see memories)",
+	)
+	settings := Settings{
 		Model:      *model,
 		OllamaUrl:  *ollama_url,
 		SearxNGUrl: *searx_url,
 	}
-
+	db := initDb()
+	defer db.Close()
 	flag.Parse()
-	mode := Auto
-	remember := false
-	history := History{}
+	r, _ := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(-1),
+	)
+	if *list_memories {
+		listMemories(db)
+		return
+	}
+	state := NewState(settings, db, r)
+	if *load_memory != "" {
+		loadMemory(state, *load_memory)
+	}
 
 	for {
 		fmt.Print("> ")
@@ -364,31 +520,40 @@ func main() {
 			continue
 		}
 		if prompt == "/remember" {
-			fmt.Println("Remembering!")
-			remember = true
+			rememberHistory(state)
 			continue
 		}
 		if prompt == "/forget" {
-			fmt.Println("Forgetting!")
-			remember = false
-			history.Interactions = []ChatInteraction{}
+			forgetHistory(state)
 			continue
 		}
-		new_mode, changed := getMode(prompt)
+		if prompt == "/save" {
+			saveHistory(state)
+			continue
+		}
+		if prompt == "/refresh-memory" {
+			forgetHistory(state)
+			rememberHistory(state)
+			continue
+		}
+		if prompt == "/current" {
+			fmt.Println(state.History.Title)
+			continue
+		}
+		changed := changeMode(state, prompt)
 
 		if changed {
-			mode = new_mode
 			continue
 		}
 
 		start := time.Now()
 		var final_answer string
 		var sources string
-		switch mode {
+		switch state.OperatingMode {
 		case Auto:
 			fmt.Println("Figuring out the best way to respond!")
 			should_search := callLLM(
-				model_settings,
+				settings,
 				fmt.Sprintf("Question: %s", prompt),
 				`You answer quickly and accurately.
 				Rules:
@@ -399,12 +564,12 @@ func main() {
 			`)
 			if should_search == "yes" {
 				fmt.Println("Looking it up!")
-				final_answer = lookupMode(model_settings, prompt, history)
+				final_answer = lookupMode(state, prompt)
 			} else {
 				fmt.Println("Answering from memory!")
 				final_answer = callLLM(
-					model_settings,
-					buildPrompt(prompt, "", history),
+					settings,
+					buildPrompt(prompt, "", state.History),
 					`You answer quickly and accurately using your own abilities.
 				Rules:
 				- If you don't know the answer always say you don't know
@@ -415,15 +580,15 @@ func main() {
 			}
 		case Research:
 			fmt.Println("Researching!")
-			final_answer, sources = researchMode(model_settings, prompt, history)
+			final_answer, sources = researchMode(state, prompt)
 		case Search:
 			fmt.Println("Looking it up!")
-			final_answer = lookupMode(model_settings, prompt, history)
+			final_answer = lookupMode(state, prompt)
 		case Simple:
 			fmt.Println("Answering from memory!")
 			final_answer = callLLM(
-				model_settings,
-				buildPrompt(prompt, "", history),
+				settings,
+				buildPrompt(prompt, "", state.History),
 				`You answer quickly and accurately using your own abilities.
 				Rules:
 				- If you don't know the answer always say you don't know
@@ -431,14 +596,13 @@ func main() {
 			`,
 			)
 		}
-		if remember {
-			history.Interactions = append(history.Interactions, ChatInteraction{Question: prompt, Answer: final_answer})
+		if state.Remember {
+			if len(state.History.Interactions) == 0 {
+				state.History.Title = prompt
+			}
+			state.History.Interactions = append(state.History.Interactions, ChatInteraction{Question: prompt, Answer: final_answer})
 		}
 
-		r, _ := glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
-			glamour.WithWordWrap(200),
-		)
 		out, err := r.Render(final_answer)
 		elapsed := time.Since(start)
 		if err != nil {
@@ -459,3 +623,12 @@ func getenv(k, def string) string {
 	}
 	return def
 }
+
+//TODO: make argument parsing better
+//TODO: make inline commands better
+//TODO: if a memory is loaded save the new version and update the updated time
+//TODO: figure out how to make auto mode decide whether to research
+//TODO: help for inline commands
+//TODO: dedicated handler for memories
+//TODO: auto-complete for inline commands
+//TODO: enable multiline prompts

@@ -2,12 +2,19 @@ module llm_playing
 
 go 1.25.6
 
-require github.com/charmbracelet/glamour v0.10.0
+require (
+	github.com/charmbracelet/glamour v0.10.0
+	github.com/google/uuid v1.6.0
+)
 
-require github.com/JohannesKaufmann/dom v0.2.0 // indirect
+require (
+	github.com/JohannesKaufmann/dom v0.2.0 // indirect
+	github.com/andybalholm/cascadia v1.3.3 // indirect
+)
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
+	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
@@ -22,6 +29,7 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
+	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect

@@ -19,12 +19,12 @@ func (self ChatInteraction) GetTags() string {
 	`, self.Question, self.Answer)
 }
 
-type History struct {
+type Memory struct {
 	Title string
 	Interactions []ChatInteraction
 }
 
-func (self History) GetHistoryForModel() string {
+func (self Memory) GetMemoryForModel() string {
 	var history strings.Builder
 	for _, interaction := range self.Interactions {
 		fmt.Fprintf(&history, "%s\n", interaction.GetTags())
@@ -32,7 +32,7 @@ func (self History) GetHistoryForModel() string {
 
 	return history.String()
 }
-func (self History) PrintHistory(renderer *glamour.TermRenderer) {
+func (self Memory) PrintMemory(renderer *glamour.TermRenderer) {
 	for _, interaction := range self.Interactions {
 		fmt.Printf("> %s\n", interaction.Question)
 		markdown, _ := renderer.Render(interaction.Answer)

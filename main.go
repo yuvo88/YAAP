@@ -19,8 +19,8 @@ import (
 	"database/sql"
 
 	markdown "github.com/JohannesKaufmann/html-to-markdown/v2"
-	"github.com/charmbracelet/glamour"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/charmbracelet/glamour"
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -37,7 +37,7 @@ type Settings struct {
 type State struct {
 	Settings      Settings
 	OperatingMode OperatingMode
-	History       History
+	Memory        Memory
 	Remember      bool
 	Database      *sql.DB
 	Renderer      *glamour.TermRenderer
@@ -190,7 +190,7 @@ func researchMode(state *State, question string) (string, string) {
 
 	queries_string := strings.Split(callLLM(
 		state.Settings,
-		buildPrompt(question, "", state.History),
+		buildPrompt(question, "", state.Memory),
 		fmt.Sprintf(`You answer quickly and accurately.
 		Rules:
 		- Your job is to turn a question into google searches
@@ -212,7 +212,7 @@ func researchMode(state *State, question string) (string, string) {
 
 	links_string := callLLM(
 		state.Settings,
-		buildPrompt(question, queries.String(), state.History),
+		buildPrompt(question, queries.String(), state.Memory),
 		fmt.Sprintf(
 			`You answer quickly and accurately using the provided markdown web snippets.
 			Rules:
@@ -238,7 +238,7 @@ func researchMode(state *State, question string) (string, string) {
 
 	return callLLM(
 		state.Settings,
-		buildPrompt(question, sb.String(), state.History),
+		buildPrompt(question, sb.String(), state.Memory),
 		`You answer quickly and accurately using the provided markdown web pages.
 		Rules:
 		- Please **always provide a link** to the web page that you got your information from.
@@ -260,7 +260,7 @@ func lookupMode(state *State, question string) string {
 	client := &http.Client{}
 	google_queries_string := callLLM(
 		state.Settings,
-		buildPrompt(question, "", state.History),
+		buildPrompt(question, "", state.Memory),
 		fmt.Sprintf(`You answer quickly and accurately.
 		Rules:
 		- Your job is to turn a question into google searches
@@ -290,7 +290,7 @@ func lookupMode(state *State, question string) string {
 
 	return callLLM(
 		state.Settings,
-		buildPrompt(question, sb.String(), state.History),
+		buildPrompt(question, sb.String(), state.Memory),
 		fmt.Sprintf(`You answer quickly and accurately using the provided markdown web snippets.
 		Rules:
 		- Please **always provide a link** to the article that you got your information from.
@@ -309,36 +309,73 @@ type OperatingMode int
 const (
 	Auto OperatingMode = iota
 	Research
-	Simple
+	Normal
 	Search
 )
 
-func changeMode(state *State, question string) bool {
-	if question == "/research" {
+func memoryHandler(state *State, command string) {
+	if command == "l" {
+		fmt.Println("Listing memories")
+		listMemories(state.Database)
+	}
+	if command[:1] == "u" {
+		fmt.Println("Using memory")
+		memory_id := strings.TrimSpace(command[1:])
+		loadMemory(state, memory_id)
+	}
+	if command == "n" {
+		fmt.Println("Creating a new memory")
+		saveMemory(state)
+		forgetMemory(state)
+		rememberMemory(state)
+
+	}
+	if command == "nf" {
+		fmt.Println("Creating a new memory and forgetting")
+		forgetMemory(state)
+		rememberMemory(state)
+	}
+	if command[:1] == "d" {
+		fmt.Println("Deleting memory")
+		memory_id := strings.TrimSpace(command[1:])
+		deleteMemory(state, memory_id)
+
+	}
+	if command == "h" {
+		fmt.Println("Memory handler help")
+		fmt.Println("l - list memories")
+		fmt.Println("u - use memory")
+		fmt.Println("n - create a new memory and save the old one")
+		fmt.Println("nf - create a new memory and don't save the old one")
+	}
+}
+func modeHandler(state *State, command string) {
+	if command == "r" {
 		fmt.Println("Switched to research mode")
 		state.OperatingMode = Research
-		return true
 	}
-	if question == "/auto" {
+	if command == "a" {
 		fmt.Println("Switched to auto mode")
 		state.OperatingMode = Auto
-		return true
 	}
-	if question == "/search" {
+	if command == "s" {
 		fmt.Println("Switched to search mode")
 		state.OperatingMode = Search
-		return true
 	}
-	if question == "/simple" {
-		fmt.Println("Switched to simple mode")
-		state.OperatingMode = Simple
-		return true
+	if command == "n" {
+		fmt.Println("Switched to normal mode")
+		state.OperatingMode = Normal
 	}
-
-	return false
+	if command == "h" {
+		fmt.Println("Mode handler help")
+		fmt.Println("r - research mode (use if you want code examples or have the model deep dive)")
+		fmt.Println("a - auto mode (use if you're not sure what to choose)")
+		fmt.Println("s - search mode (use if you want the model to quickly search the web for current information)")
+		fmt.Println("n - normal mode (use if you want the model to reply by itself)")
+	}
 }
 
-func buildPrompt(prompt string, context string, history History) string {
+func buildPrompt(prompt string, context string, memory Memory) string {
 	return fmt.Sprintf(`
 		[history]
 		%s
@@ -346,10 +383,9 @@ func buildPrompt(prompt string, context string, history History) string {
 		%s
 		[question]
 		%s
-	`, history.GetHistoryForModel(), context, prompt)
+	`, memory.GetMemoryForModel(), context, prompt)
 }
-func saveHistory(state *State) {
-	fmt.Println("Saving history!")
+func saveMemory(state *State) {
 	dir := memories_directory_name
 	id := uuid.New().String()
 
@@ -367,26 +403,35 @@ func saveHistory(state *State) {
 
 	encoder := gob.NewEncoder(file)
 
-	if err := encoder.Encode(state.History); err != nil {
+	if err := encoder.Encode(state.Memory); err != nil {
 		panic("")
 	}
-	_, err = state.Database.Exec("INSERT INTO memories (id, title, updated) VALUES (?, ?, ?)", id, state.History.Title, time.Now().Unix())
+	_, err = state.Database.Exec("INSERT INTO memories (id, title, updated) VALUES (?, ?, ?)", id, state.Memory.Title, time.Now().Unix())
 	if err != nil {
 		panic("")
 	}
 }
-func forgetHistory(state *State) {
-	fmt.Println("Forgetting!")
-	state.Remember = false
-	state.History.Interactions = []ChatInteraction{}
-	state.History.Title = ""
+func deleteMemory(state *State, memory_id string) {
+	file_path := filepath.Join(memories_directory_name, memory_id)
+	_, err := state.Database.Exec("DELETE FROM memories WHERE id=?", memory_id)
+	if err != nil {
+		panic("Couldn't delete memory from database")
+	}
+	err = os.Remove(file_path)
+	if err != nil {
+		panic("Couldn't remove memory from disk")
+	}
 }
-func rememberHistory(state *State) {
-	fmt.Println("Remembering!")
+func forgetMemory(state *State) {
+	state.Remember = false
+	state.Memory.Interactions = []ChatInteraction{}
+	state.Memory.Title = ""
+}
+func rememberMemory(state *State) {
 	state.Remember = true
 }
 
-type Memory struct {
+type MemoryDto struct {
 	Id      string
 	Title   string
 	Updated string
@@ -399,9 +444,9 @@ func listMemories(database *sql.DB) {
 		panic("")
 	}
 	defer rows.Close()
-	var memories []Memory
+	var memories []MemoryDto
 	for rows.Next() {
-		var memory Memory
+		var memory MemoryDto
 		if err := rows.Scan(&memory.Id, &memory.Title, &memory.Updated); err != nil {
 			panic("")
 		}
@@ -427,14 +472,14 @@ func loadMemory(state *State, memory_id string) {
 
 	decoder := gob.NewDecoder(file)
 
-	var history History
+	var memory Memory
 
-	err := decoder.Decode(&history)
+	err := decoder.Decode(&memory)
 	if err != nil {
 		fmt.Println("Memory not found")
 	}
-	state.History = history
-	state.History.PrintHistory(state.Renderer)
+	state.Memory = memory
+	state.Memory.PrintMemory(state.Renderer)
 }
 
 func initDb() *sql.DB {
@@ -519,30 +564,22 @@ func main() {
 		if prompt == "" {
 			continue
 		}
-		if prompt == "/remember" {
-			rememberHistory(state)
-			continue
-		}
-		if prompt == "/forget" {
-			forgetHistory(state)
-			continue
-		}
-		if prompt == "/save" {
-			saveHistory(state)
-			continue
-		}
-		if prompt == "/refresh-memory" {
-			forgetHistory(state)
-			rememberHistory(state)
-			continue
+		if prompt == "/exit" {
+			saveMemory(state)
+			break
 		}
 		if prompt == "/current" {
-			fmt.Println(state.History.Title)
+			fmt.Println(state.Memory.Title)
 			continue
 		}
-		changed := changeMode(state, prompt)
-
-		if changed {
+		if len(prompt) > 5 && prompt[:5] == "/mode" {
+			command := strings.TrimSpace(prompt[5:])
+			modeHandler(state, command)
+			continue
+		}
+		if len(prompt) > 7 && prompt[:7] == "/memory" {
+			command := strings.TrimSpace(prompt[7:])
+			memoryHandler(state, command)
 			continue
 		}
 
@@ -569,7 +606,7 @@ func main() {
 				fmt.Println("Answering from memory!")
 				final_answer = callLLM(
 					settings,
-					buildPrompt(prompt, "", state.History),
+					buildPrompt(prompt, "", state.Memory),
 					`You answer quickly and accurately using your own abilities.
 				Rules:
 				- If you don't know the answer always say you don't know
@@ -584,11 +621,11 @@ func main() {
 		case Search:
 			fmt.Println("Looking it up!")
 			final_answer = lookupMode(state, prompt)
-		case Simple:
+		case Normal:
 			fmt.Println("Answering from memory!")
 			final_answer = callLLM(
 				settings,
-				buildPrompt(prompt, "", state.History),
+				buildPrompt(prompt, "", state.Memory),
 				`You answer quickly and accurately using your own abilities.
 				Rules:
 				- If you don't know the answer always say you don't know
@@ -597,10 +634,10 @@ func main() {
 			)
 		}
 		if state.Remember {
-			if len(state.History.Interactions) == 0 {
-				state.History.Title = prompt
+			if len(state.Memory.Interactions) == 0 {
+				state.Memory.Title = prompt
 			}
-			state.History.Interactions = append(state.History.Interactions, ChatInteraction{Question: prompt, Answer: final_answer})
+			state.Memory.Interactions = append(state.Memory.Interactions, ChatInteraction{Question: prompt, Answer: final_answer})
 		}
 
 		out, err := r.Render(final_answer)
@@ -624,11 +661,10 @@ func getenv(k, def string) string {
 	return def
 }
 
-//TODO: make argument parsing better
-//TODO: make inline commands better
 //TODO: if a memory is loaded save the new version and update the updated time
 //TODO: figure out how to make auto mode decide whether to research
 //TODO: help for inline commands
 //TODO: dedicated handler for memories
 //TODO: auto-complete for inline commands
 //TODO: enable multiline prompts
+//TODO: Make workspaces for different conversations

@@ -373,6 +373,25 @@ func modeHandler(state *State, command string) {
 	}
 }
 
+func commandHandler(state *State, command string) {
+	parsed_command := strings.Split(command, " ")
+	command_name := parsed_command[0]
+	switch command_name {
+	case "exit":
+		saveMemory(state)
+		os.Exit(0)
+	case "current":
+		fmt.Println(state.Memory.Title)
+	case "mode":
+		modeHandler(state, strings.Join(parsed_command[1:], " "))
+	case "memory":
+		memoryHandler(state, strings.Join(parsed_command[1:], " "))
+	default:
+		fmt.Println("Couldn't find command")
+	}
+
+}
+
 func buildPrompt(prompt string, context string, memory Memory) string {
 	return fmt.Sprintf(`
 		[history]
@@ -443,22 +462,8 @@ func main() {
 		if prompt == "" {
 			continue
 		}
-		if prompt == "/exit" {
-			saveMemory(state)
-			break
-		}
-		if prompt == "/current" {
-			fmt.Println(state.Memory.Title)
-			continue
-		}
-		if len(prompt) > 5 && prompt[:5] == "/mode" {
-			command := strings.TrimSpace(prompt[5:])
-			modeHandler(state, command)
-			continue
-		}
-		if len(prompt) > 7 && prompt[:7] == "/memory" {
-			command := strings.TrimSpace(prompt[7:])
-			memoryHandler(state, command)
+		if prompt[0] == '/' {
+			commandHandler(state, prompt[1:])
 			continue
 		}
 
@@ -541,10 +546,10 @@ func getenv(k, def string) string {
 	return def
 }
 
-//TODO: if a memory is loaded save the new version and update the updated time
-//TODO: figure out how to make auto mode decide whether to research
 //TODO: help for inline commands
-//TODO: dedicated handler for memories
 //TODO: auto-complete for inline commands
 //TODO: enable multiline prompts
 //TODO: Make workspaces for different conversations
+//TODO: figure out how to make auto mode decide whether to research
+//TODO: jump to top of response on response
+//TODO: Pretty print the timestamps

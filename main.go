@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -83,7 +84,7 @@ func getRequest(client *http.Client, link string) string {
 		return ""
 	}
 
-	return markdown
+	return escapeOutput(markdown)
 }
 
 func searxSearch(client *http.Client, baseURL, q string, page_number int) (string, error) {
@@ -130,7 +131,7 @@ func searxSearch(client *http.Client, baseURL, q string, page_number int) (strin
 		return "", err
 	}
 
-	return markdown, nil
+	return escapeOutput(markdown), nil
 }
 
 type LLMResponse struct {
@@ -184,6 +185,10 @@ func callLLM(model_settings Settings, prompt string, system string) *LLMResponse
 	}
 
 	return answer
+}
+func escapeOutput(input string) string {
+	re := regexp.MustCompile(`[\s\n\t]+`)
+	return re.ReplaceAllString(input, "|")
 }
 func researchMode(state *State, question string) (string, string) {
 	month := time.Now().Month().String()
@@ -516,7 +521,7 @@ func main() {
 			final_answer = lookupMode(state, prompt)
 		case Normal:
 			fmt.Println("Answering from memory!")
-			final_answer = callLLM(
+			answer := callLLM(
 				settings,
 				buildPrompt(prompt, "", state.Memory),
 				`You answer quickly and accurately using your own abilities.
@@ -524,7 +529,9 @@ func main() {
 				- If you don't know the answer always say you don't know
 				- You always respond in markdown
 			`,
-			).Response
+			)
+			fmt.Printf("Token Count: %d", answer.PromptEvalCount)
+			final_answer = answer.Response
 		}
 		if state.Remember {
 			if len(state.Memory.Interactions) == 0 {
@@ -566,3 +573,4 @@ func getenv(k, def string) string {
 //TODO: Add logs
 //TODO: Make a benchmark to "objectively" profile this tool
 //TODO: enable memory exporting
+//TODO: Load last used memory (--resume)

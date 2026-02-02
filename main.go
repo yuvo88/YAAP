@@ -386,17 +386,21 @@ func buildPrompt(prompt string, context string, memory Memory) string {
 	`, memory.GetMemoryForModel(), context, prompt)
 }
 func saveMemory(state *State) {
+	if len(state.Memory.Interactions) == 0 {
+		return
+	}
+	if state.Memory.Id == "" {
+		state.Memory.Id = uuid.New().String()
+	}
 	dir := memories_directory_name
-	id := uuid.New().String()
-
-	file_path := filepath.Join(dir, id)
+	file_path := filepath.Join(dir, state.Memory.Id)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		panic("")
+		panic(err)
 	}
 
 	file, err := os.Create(file_path)
 	if err != nil {
-		panic("")
+		panic(err)
 	}
 
 	defer file.Close()
@@ -404,11 +408,17 @@ func saveMemory(state *State) {
 	encoder := gob.NewEncoder(file)
 
 	if err := encoder.Encode(state.Memory); err != nil {
-		panic("")
+		panic(err)
 	}
-	_, err = state.Database.Exec("INSERT INTO memories (id, title, updated) VALUES (?, ?, ?)", id, state.Memory.Title, time.Now().Unix())
+	_, err = state.Database.Exec(
+		`INSERT INTO memories (id, title, updated) 
+		 VALUES (?, ?, ?)
+		 ON CONFLICT (id) DO UPDATE
+		 SET 
+			updated = excluded.updated`,
+		 state.Memory.Id, state.Memory.Title, time.Now().Unix())
 	if err != nil {
-		panic("")
+		panic(err)
 	}
 }
 func deleteMemory(state *State, memory_id string) {
@@ -636,6 +646,7 @@ func main() {
 		if state.Remember {
 			if len(state.Memory.Interactions) == 0 {
 				state.Memory.Title = prompt
+				state.Memory.Id = uuid.New().String()
 			}
 			state.Memory.Interactions = append(state.Memory.Interactions, ChatInteraction{Question: prompt, Answer: final_answer})
 		}

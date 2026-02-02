@@ -21,6 +21,7 @@ func (self ChatInteraction) GetTags() string {
 
 type Memory struct {
 	Title string
+	Id string
 	Interactions []ChatInteraction
 }
 

@@ -132,7 +132,14 @@ func searxSearch(client *http.Client, baseURL, q string, page_number int) (strin
 
 	return markdown, nil
 }
-func ollamaGenerate(ctx context.Context, client *http.Client, baseURL, model, system string, prompt string) (string, error) {
+
+type LLMResponse struct {
+	Response        string `json:"response"`
+	PromptEvalCount int    `json:"prompt_eval_count"`
+}
+
+func ollamaGenerate(ctx context.Context, client *http.Client, baseURL, model, system string, prompt string) (*LLMResponse, error) {
+	out := &LLMResponse{}
 	reqBody := map[string]any{
 		"model":  model,
 		"prompt": prompt,
@@ -150,26 +157,23 @@ func ollamaGenerate(ctx context.Context, client *http.Client, baseURL, model, sy
 		bytes.NewReader(b),
 	)
 	if err != nil {
-		return "", err
+		return out, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return out, err
 	}
 	defer resp.Body.Close()
 
-	var out struct {
-		Response string `json:"response"`
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return out, err
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(out.Response), nil
+	return out, nil
 }
 
-func callLLM(model_settings Settings, prompt string, system string) string {
+func callLLM(model_settings Settings, prompt string, system string) *LLMResponse {
 	client := &http.Client{}
 	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
 	defer cancelLLM()
@@ -195,7 +199,7 @@ func researchMode(state *State, question string) (string, string) {
 		- The current date is %s %d if the user asks about something happening now
 		- You reply with between 1 and 3 short google queries separated by a newline character
 		- Keep the queries short ( between 3 to 5 words )
-		`, month, year)), "\n")
+		`, month, year)).Response, "\n")
 
 	var queries strings.Builder
 
@@ -215,12 +219,12 @@ func researchMode(state *State, question string) (string, string) {
 			`You answer quickly and accurately using the provided markdown web snippets.
 			Rules:
 			- Use the provided markdown web snippets and only the provided markdown web snippets as context
-			- Respond with 1-5 links that the most relavant to the users question and closest to %s %d
+			- Respond with 1-3 links that the most relavant to the users question and closest to %s %d
 			- Please make sure that you cover all parts of the user's question with the links you provide
 			- Only return links separated by newline characters nothing else
 			`, month, year,
 		),
-	)
+	).Response
 	links := strings.Split(links_string, "\n")
 
 	var sb strings.Builder
@@ -233,8 +237,7 @@ func researchMode(state *State, question string) (string, string) {
 		result := getRequest(client, trimmed)
 		fmt.Fprintf(&sb, "# Original link: %s\n# Page:\n%s\n\n", trimmed, result)
 	}
-
-	return callLLM(
+	final_answer := callLLM(
 		state.Settings,
 		buildPrompt(question, sb.String(), state.Memory),
 		`You answer quickly and accurately using the provided markdown web pages.
@@ -250,7 +253,11 @@ func researchMode(state *State, question string) (string, string) {
 		- If you don't find the answer in the provided pages please say so explicitly.
 		- You always respond in markdown
 		`,
-	), links_string
+	)
+
+	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
+
+	return final_answer.Response, links_string
 }
 func lookupMode(state *State, question string) string {
 	month := time.Now().Month().String()
@@ -263,9 +270,9 @@ func lookupMode(state *State, question string) string {
 		Rules:
 		- Your job is to turn a question into google searches
 		- The current date is %s %d if the user asks about something happening now
-		- You reply with between 1 and 10 short google queries separated by a newline character
+		- You reply with between 1 and 3 short google queries separated by a newline character
 		- Keep the queries short ( between 3 to 5 words )
-		`, month, year))
+		`, month, year)).Response
 
 	lines := strings.Split(google_queries_string, "\n")
 
@@ -286,7 +293,7 @@ func lookupMode(state *State, question string) string {
 		fmt.Fprintf(&sb, "Original query: %s\n\nAnswer:%s\n\n", query, result)
 	}
 
-	return callLLM(
+	final_answer := callLLM(
 		state.Settings,
 		buildPrompt(question, sb.String(), state.Memory),
 		fmt.Sprintf(`You answer quickly and accurately using the provided markdown web snippets.
@@ -300,6 +307,8 @@ func lookupMode(state *State, question string) string {
 		- You always respond in markdown
 		`, month, year),
 	)
+	fmt.Printf("Token Count: %d", final_answer.PromptEvalCount)
+	return final_answer.Response
 }
 
 type OperatingMode int
@@ -411,7 +420,7 @@ func main() {
 	)
 	model := flag.String(
 		"model",
-		getenv("MODEL", "qwen-32k"),
+		getenv("MODEL", "qwen-40k"),
 		"The name of the model that will run inference",
 	)
 	ollama_url := flag.String(
@@ -482,7 +491,7 @@ func main() {
 					- If you feel like you're not sure opt for yes
 					- If the request is to summarize information that you are clearly given in the question answer no
 					- Please answer only in yes or no
-			`)
+			`).Response
 			if should_search == "yes" {
 				fmt.Println("Looking it up!")
 				final_answer = lookupMode(state, prompt)
@@ -496,7 +505,7 @@ func main() {
 				- If you don't know the answer always say you don't know
 				- You always respond in markdown
 			`,
-				)
+				).Response
 
 			}
 		case Research:
@@ -515,7 +524,7 @@ func main() {
 				- If you don't know the answer always say you don't know
 				- You always respond in markdown
 			`,
-			)
+			).Response
 		}
 		if state.Remember {
 			if len(state.Memory.Interactions) == 0 {
@@ -553,3 +562,7 @@ func getenv(k, def string) string {
 //TODO: figure out how to make auto mode decide whether to research
 //TODO: jump to top of response on response
 //TODO: Pretty print the timestamps
+//TODO: add elapsed time counter
+//TODO: Add logs
+//TODO: Make a benchmark to "objectively" profile this tool
+//TODO: enable memory exporting

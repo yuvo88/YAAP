@@ -28,9 +28,9 @@ const memories_db_name string = ".memories.db"
 const memories_directory_name string = ".memories"
 
 type Settings struct {
-	Model      string
-	OllamaUrl  string
-	SearxNGUrl string
+	Model         string
+	OllamaUrl     string
+	SearxNGUrl    string
 }
 
 type State struct {
@@ -574,3 +574,4 @@ func getenv(k, def string) string {
 //TODO: Make a benchmark to "objectively" profile this tool
 //TODO: enable memory exporting
 //TODO: Load last used memory (--resume)
+//TODO: Bug with printing, sometimes it prints both formatted and not formatted (I'm pretty sure it's because we reach maximum context on the links agent

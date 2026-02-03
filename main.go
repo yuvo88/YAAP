@@ -575,3 +575,4 @@ func getenv(k, def string) string {
 //TODO: enable memory exporting
 //TODO: Load last used memory (--resume)
 //TODO: Bug with printing, sometimes it prints both formatted and not formatted (I'm pretty sure it's because we reach maximum context on the links agent
+//TODO: Use gemma3 for faster decisions using format and invopop/jsonschema

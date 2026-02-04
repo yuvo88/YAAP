@@ -594,10 +594,14 @@ func memoryHandler(state *State, command string) {
 
 	if command == "h" {
 		fmt.Println("Memory handler help")
-		fmt.Println("l - list memories")
-		fmt.Println("u - use memory")
-		fmt.Println("n - create a new memory and save the old one")
-		fmt.Println("nf - create a new memory and don't save the old one")
+		fmt.Println("This way you can handle your program's memories")
+		fmt.Println("Usage:")
+		fmt.Println("  /memory <Flag> <Flag Value>")
+		fmt.Println("Flags:")
+		fmt.Println("  l - list memories")
+		fmt.Println("  u - use memory - value UUID")
+		fmt.Println("  n - create a new memory and save the old one")
+		fmt.Println("  nf - create a new memory and don't save the old one")
 	}
 }
 func modeHandler(state *State, command string) {
@@ -623,11 +627,15 @@ func modeHandler(state *State, command string) {
 	}
 	if command == "h" {
 		fmt.Println("Mode handler help")
-		fmt.Println("r - research mode (use if you want to have the model deep dive)")
-		fmt.Println("a - auto mode (use if you're not sure what to choose)")
-		fmt.Println("s - search mode (use if you want the model to quickly search the web for current information)")
-		fmt.Println("n - normal mode (use if you want the model to reply by itself)")
-		fmt.Println("c - code mode (Use for accurate code examples)")
+		fmt.Println("This is the way you can decide what modes your llm works in")
+		fmt.Println("Usage:")
+		fmt.Println("  /mode <Flag>")
+		fmt.Println("flags:")
+		fmt.Println("  r - research mode (use if you want to have the model deep dive)")
+		fmt.Println("  a - auto mode (use if you're not sure what to choose)")
+		fmt.Println("  s - search mode (use if you want the model to quickly search the web for current information)")
+		fmt.Println("  n - normal mode (use if you want the model to reply by itself)")
+		fmt.Println("  c - code mode (Use for accurate code examples)")
 	}
 }
 
@@ -644,6 +652,13 @@ func commandHandler(state *State, command string) {
 		modeHandler(state, strings.Join(parsed_command[1:], " "))
 	case "memory":
 		memoryHandler(state, strings.Join(parsed_command[1:], " "))
+	case "help":
+		fmt.Println("YAAP - Yet Another Ai Program")
+		fmt.Println("commands:")
+		fmt.Println("  /mode: change the execution mode (/mode h) for help")
+		fmt.Println("  /memory: memory commands (/memory h) for help")
+		fmt.Println("  /current: look at the name of the current loaded memory")
+		fmt.Println("  /exit: exit the program")
 	default:
 		fmt.Println("Couldn't find command")
 	}
@@ -834,6 +849,5 @@ func getenv(k, def string) string {
 //TODO: Pretty print the timestamps
 //TODO: add elapsed time counter
 //TODO: Add logs
-//TODO: Make a benchmark to "objectively" profile this tool
 //TODO: enable memory exporting
 //TODO: Add links to the output of the load page

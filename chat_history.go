@@ -10,6 +10,7 @@ import (
 type ChatInteraction struct {
 	Question string
 	Answer   string
+	Links    []string
 }
 
 func (self ChatInteraction) GetTags() string {
@@ -20,8 +21,8 @@ func (self ChatInteraction) GetTags() string {
 }
 
 type Memory struct {
-	Title string
-	Id string
+	Title        string
+	Id           string
 	Interactions []ChatInteraction
 }
 
@@ -38,9 +39,7 @@ func (self Memory) PrintMemory(renderer *glamour.TermRenderer) {
 		fmt.Printf("> %s\n", interaction.Question)
 		markdown, _ := renderer.Render(interaction.Answer)
 		fmt.Println(markdown)
+		fmt.Println(strings.Join(interaction.Links, "\n"))
 	}
 
 }
-
-
-

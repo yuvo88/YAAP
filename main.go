@@ -261,7 +261,7 @@ func escapeOutput(input string) string {
 	re := regexp.MustCompile(`[\s\n\t]+`)
 	return re.ReplaceAllString(input, "|")
 }
-func researchMode(state *State, question string) (string, string) {
+func researchMode(state *State, question string) (string, []string) {
 	month := time.Now().Month().String()
 	year := time.Now().Year()
 	client := &http.Client{}
@@ -375,10 +375,10 @@ func researchMode(state *State, question string) (string, string) {
 
 	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
 
-	return final_answer.Response, strings.Join(items, "\n")
+	return final_answer.Response, items
 }
 
-func codeMode(state *State, question string) (string, string) {
+func codeMode(state *State, question string) (string, []string) {
 	month := time.Now().Month().String()
 	year := time.Now().Year()
 	client := &http.Client{}
@@ -492,7 +492,7 @@ func codeMode(state *State, question string) (string, string) {
 
 	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
 
-	return final_answer.Response, strings.Join(items, "\n")
+	return final_answer.Response, items
 }
 func lookupMode(state *State, question string) string {
 	month := time.Now().Month().String()
@@ -757,7 +757,7 @@ func main() {
 
 		start := time.Now()
 		var final_answer string
-		var sources string
+		var sources []string
 		switch state.OperatingMode {
 		case Auto:
 			fmt.Println("Figuring out the best way to respond!")
@@ -816,7 +816,7 @@ func main() {
 				state.Memory.Title = prompt
 				state.Memory.Id = uuid.New().String()
 			}
-			state.Memory.Interactions = append(state.Memory.Interactions, ChatInteraction{Question: prompt, Answer: final_answer})
+			state.Memory.Interactions = append(state.Memory.Interactions, ChatInteraction{Question: prompt, Answer: final_answer, Links: sources})
 		}
 
 		out, err := r.Render(final_answer)
@@ -826,7 +826,7 @@ func main() {
 		} else {
 			fmt.Println(out)
 		}
-		fmt.Println(sources)
+		fmt.Println(strings.Join(sources, "\n"))
 
 		fmt.Println("Took:", elapsed)
 
@@ -840,14 +840,13 @@ func getenv(k, def string) string {
 	return def
 }
 
-//TODO: help for inline commands
+//TODO: Add links to the output of the load page
+//TODO: jump to top of response on response
+//TODO: Pretty print the timestamps on list
+//TODO: add elapsed time counter
+//TODO: Add logs
+//TODO: enable memory exporting
 //TODO: auto-complete for inline commands
 //TODO: enable multiline prompts
 //TODO: Make workspaces for different conversations
 //TODO: figure out how to make auto mode decide whether to research
-//TODO: jump to top of response on response
-//TODO: Pretty print the timestamps
-//TODO: add elapsed time counter
-//TODO: Add logs
-//TODO: enable memory exporting
-//TODO: Add links to the output of the load page

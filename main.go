@@ -29,9 +29,10 @@ const memories_db_name string = ".memories.db"
 const memories_directory_name string = ".memories"
 
 type Settings struct {
-	Model      string
+	HeavyModel string
 	OllamaUrl  string
 	SearxNGUrl string
+	LightModel string
 }
 
 type State struct {
@@ -206,7 +207,7 @@ func getQueriesFromLightLLM(model_settings Settings, prompt string, system strin
 	defer cancelLLM()
 	schema := jsonschema.Reflect(&QueriesList{})
 
-	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, "gemma-128k", system, prompt, schema)
+	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.LightModel, system, prompt, schema)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)
@@ -222,7 +223,7 @@ func getLinksFromLightLLM(model_settings Settings, prompt string, system string)
 	defer cancelLLM()
 	schema := jsonschema.Reflect(&LinksList{})
 
-	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, "gemma-64k", system, prompt, schema)
+	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.LightModel, system, prompt, schema)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)
@@ -236,7 +237,7 @@ func callLightLLM(model_settings Settings, prompt string, system string) *LLMRes
 	client := &http.Client{}
 	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
 	defer cancelLLM()
-	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, "gemma-64k", system, prompt, nil)
+	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.LightModel, system, prompt, nil)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)
@@ -248,7 +249,7 @@ func callHeavyLLM(model_settings Settings, prompt string, system string) *LLMRes
 	client := &http.Client{}
 	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
 	defer cancelLLM()
-	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.Model, system, prompt, nil)
+	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.HeavyModel, system, prompt, nil)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)
@@ -558,11 +559,13 @@ func memoryHandler(state *State, command string) {
 		fmt.Println("Listing memories")
 		listMemories(state.Database)
 	}
+
 	if command[:1] == "u" {
 		fmt.Println("Using memory")
 		memory_id := strings.TrimSpace(command[1:])
 		loadMemory(state, memory_id)
 	}
+
 	if command == "n" {
 		fmt.Println("Creating a new memory")
 		saveMemory(state)
@@ -570,17 +573,25 @@ func memoryHandler(state *State, command string) {
 		rememberMemory(state)
 
 	}
+
+	if command == "r" {
+		fmt.Println("Resuming last memory")
+		resumeLastMemory(state)
+	}
+
 	if command == "nf" {
 		fmt.Println("Creating a new memory and forgetting")
 		forgetMemory(state)
 		rememberMemory(state)
 	}
+
 	if command[:1] == "d" {
 		fmt.Println("Deleting memory")
 		memory_id := strings.TrimSpace(command[1:])
 		deleteMemory(state, memory_id)
 
 	}
+
 	if command == "h" {
 		fmt.Println("Memory handler help")
 		fmt.Println("l - list memories")
@@ -656,9 +667,14 @@ func main() {
 		getenv("SEARXNG_URL", "http://localhost:8080"),
 		"SearxNG server address",
 	)
-	model := flag.String(
-		"model",
-		getenv("MODEL", "qwen-40k"),
+	heavyModel := flag.String(
+		"heavy-model",
+		getenv("HEAVY_MODEL", "qwen-40k"),
+		"The name of the model that will run inference",
+	)
+	lightModel := flag.String(
+		"light-model",
+		getenv("LIGHT_MODEL", "gemma-64k"),
 		"The name of the model that will run inference",
 	)
 	ollama_url := flag.String(
@@ -671,13 +687,19 @@ func main() {
 		false,
 		"Should list memories",
 	)
+	resume := flag.Bool(
+		"resume",
+		false,
+		"Should resume last session",
+	)
 	load_memory := flag.String(
 		"load-memory",
 		"",
 		"Memory id of memory to load from the list of memories. (--list-memories to see memories)",
 	)
 	settings := Settings{
-		Model:      *model,
+		HeavyModel: *heavyModel,
+		LightModel: *lightModel,
 		OllamaUrl:  *ollama_url,
 		SearxNGUrl: *searx_url,
 	}
@@ -695,6 +717,10 @@ func main() {
 	state := NewState(settings, db, r)
 	if *load_memory != "" {
 		loadMemory(state, *load_memory)
+	}
+
+	if *resume {
+		resumeLastMemory(state)
 	}
 
 	for {
@@ -810,7 +836,4 @@ func getenv(k, def string) string {
 //TODO: Add logs
 //TODO: Make a benchmark to "objectively" profile this tool
 //TODO: enable memory exporting
-//TODO: Load last used memory (--resume)
-//TODO: Bug with printing, sometimes it prints both formatted and not formatted (I'm pretty sure it's because we reach maximum context on the links agent
-//TODO: Use gemma3 for faster decisions using format and invopop/jsonschema
 //TODO: Add links to the output of the load page

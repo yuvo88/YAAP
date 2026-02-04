@@ -72,7 +72,32 @@ type MemoryDto struct {
 	Title   string
 	Updated string
 }
+func resumeLastMemory(state *State) {
+	row := state.Database.QueryRow("SELECT id FROM memories ORDER BY updated DESC LIMIT 1")
 
+	var memoryId string
+	err := row.Scan(&memoryId)
+	if err != nil {
+		panic("Couldn't find last memory")
+	}
+	
+	file_path := filepath.Join(memories_directory_name, memoryId)
+	file, _ := os.Open(file_path)
+	defer file.Close()
+
+	decoder := gob.NewDecoder(file)
+
+	var memory Memory
+
+	err = decoder.Decode(&memory)
+	if err != nil {
+		fmt.Println("Memory not found")
+	}
+	state.Memory = memory
+	state.Memory.PrintMemory(state.Renderer)
+
+
+}
 func listMemories(database *sql.DB) {
 	rows, err := database.Query("SELECT * FROM memories ORDER BY updated")
 

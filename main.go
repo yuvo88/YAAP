@@ -21,6 +21,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/charmbracelet/glamour"
 	"github.com/google/uuid"
+	"github.com/invopop/jsonschema"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -28,9 +29,9 @@ const memories_db_name string = ".memories.db"
 const memories_directory_name string = ".memories"
 
 type Settings struct {
-	Model         string
-	OllamaUrl     string
-	SearxNGUrl    string
+	Model      string
+	OllamaUrl  string
+	SearxNGUrl string
 }
 
 type State struct {
@@ -53,7 +54,6 @@ func NewState(settings Settings, database *sql.DB, renderer *glamour.TermRendere
 }
 
 func getRequest(client *http.Client, link string) string {
-
 	req, err := http.NewRequest("GET", link, nil)
 	if err != nil {
 		return ""
@@ -138,8 +138,18 @@ type LLMResponse struct {
 	Response        string `json:"response"`
 	PromptEvalCount int    `json:"prompt_eval_count"`
 }
+type LinksList struct {
+	Links []string `json:"links"`
+}
+type QueriesList struct {
+	Queries []string `json:"queries"`
+}
 
-func ollamaGenerate(ctx context.Context, client *http.Client, baseURL, model, system string, prompt string) (*LLMResponse, error) {
+type Decision struct {
+	Decision bool `json:"decision"`
+}
+
+func ollamaGenerate(ctx context.Context, client *http.Client, baseURL, model, system string, prompt string, format *jsonschema.Schema) (*LLMResponse, error) {
 	out := &LLMResponse{}
 	reqBody := map[string]any{
 		"model":  model,
@@ -150,6 +160,7 @@ func ollamaGenerate(ctx context.Context, client *http.Client, baseURL, model, sy
 		"options": map[string]any{
 			"temperature": 0.2,
 		},
+		"format": format,
 	}
 	b, _ := json.Marshal(reqBody)
 
@@ -173,12 +184,71 @@ func ollamaGenerate(ctx context.Context, client *http.Client, baseURL, model, sy
 	}
 	return out, nil
 }
-
-func callLLM(model_settings Settings, prompt string, system string) *LLMResponse {
+func getDecisionFromLightLLM(model_settings Settings, prompt string, system string) *Decision {
 	client := &http.Client{}
 	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
 	defer cancelLLM()
-	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.Model, system, prompt)
+	schema := jsonschema.Reflect(&Decision{})
+
+	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, "gemma-128k", system, prompt, schema)
+	if err != nil {
+		fmt.Println("LLM failed:", err)
+		os.Exit(1)
+	}
+	decision := &Decision{}
+	json.Unmarshal([]byte(answer.Response), decision)
+
+	return decision
+}
+func getQueriesFromLightLLM(model_settings Settings, prompt string, system string) *QueriesList {
+	client := &http.Client{}
+	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
+	defer cancelLLM()
+	schema := jsonschema.Reflect(&QueriesList{})
+
+	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, "gemma-128k", system, prompt, schema)
+	if err != nil {
+		fmt.Println("LLM failed:", err)
+		os.Exit(1)
+	}
+	queries := &QueriesList{}
+	json.Unmarshal([]byte(answer.Response), queries)
+
+	return queries
+}
+func getLinksFromLightLLM(model_settings Settings, prompt string, system string) *LinksList {
+	client := &http.Client{}
+	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
+	defer cancelLLM()
+	schema := jsonschema.Reflect(&LinksList{})
+
+	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, "gemma-64k", system, prompt, schema)
+	if err != nil {
+		fmt.Println("LLM failed:", err)
+		os.Exit(1)
+	}
+	linksList := &LinksList{}
+	json.Unmarshal([]byte(answer.Response), linksList)
+
+	return linksList
+}
+func callLightLLM(model_settings Settings, prompt string, system string) *LLMResponse {
+	client := &http.Client{}
+	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
+	defer cancelLLM()
+	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, "gemma-64k", system, prompt, nil)
+	if err != nil {
+		fmt.Println("LLM failed:", err)
+		os.Exit(1)
+	}
+
+	return answer
+}
+func callHeavyLLM(model_settings Settings, prompt string, system string) *LLMResponse {
+	client := &http.Client{}
+	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
+	defer cancelLLM()
+	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.Model, system, prompt, nil)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)
@@ -195,20 +265,22 @@ func researchMode(state *State, question string) (string, string) {
 	year := time.Now().Year()
 	client := &http.Client{}
 
-	queries_string := strings.Split(callLLM(
+	queriesList := getQueriesFromLightLLM(
 		state.Settings,
 		buildPrompt(question, "", state.Memory),
 		fmt.Sprintf(`You answer quickly and accurately.
 		Rules:
-		- Your job is to turn a question into google searches
+		- Your job is to turn a question into google queries
 		- The current date is %s %d if the user asks about something happening now
 		- You reply with between 1 and 3 short google queries separated by a newline character
+		- Each query is a sentence built of multiple words
+		- **NEVER** have a query with only one word
 		- Keep the queries short ( between 3 to 5 words )
-		`, month, year)).Response, "\n")
+		`, month, year)).Queries
 
 	var queries strings.Builder
 
-	for _, query := range queries_string {
+	for _, query := range queriesList {
 		trimmed := strings.TrimSpace(query)
 		if trimmed == "" {
 			continue
@@ -217,7 +289,7 @@ func researchMode(state *State, question string) (string, string) {
 		fmt.Fprintf(&queries, "%s", result)
 	}
 
-	links_string := callLLM(
+	links := getLinksFromLightLLM(
 		state.Settings,
 		buildPrompt(question, queries.String(), state.Memory),
 		fmt.Sprintf(
@@ -229,22 +301,62 @@ func researchMode(state *State, question string) (string, string) {
 			- Only return links separated by newline characters nothing else
 			`, month, year,
 		),
-	).Response
-	links := strings.Split(links_string, "\n")
+	)
 
-	var sb strings.Builder
-
-	for _, link := range links {
+	linkList := make(map[string]struct{})
+	for _, link := range links.Links {
 		trimmed := strings.TrimSpace(link)
 		if trimmed == "" {
 			continue
 		}
-		result := getRequest(client, trimmed)
-		fmt.Fprintf(&sb, "# Original link: %s\n# Page:\n%s\n\n", trimmed, result)
+		result := getLinksFromLightLLM(
+			state.Settings,
+			buildPrompt(question, getRequest(client, link), state.Memory),
+			fmt.Sprintf(
+				`You answer quickly and accurately using the provided markdown web snippets.
+			Rules:
+			- Use the provided markdown web snippets and only the provided markdown web snippets as context
+			- Respond with 1-3 links that the most relavant to the users question and closest to %s %d
+			- Please make sure that you cover all parts of the user's question with the links you provide
+			- Only return links separated by newline characters nothing else
+			`, month, year,
+			),
+		)
+		for _, l := range result.Links {
+			linkList[l] = struct{}{}
+		}
+		// fmt.Fprintf(&sb, "# Original link: %s\n# Summarized Page:\n%s\n\n", trimmed, result)
 	}
-	final_answer := callLLM(
+	items := make([]string, 0, len(linkList))
+	for k := range linkList {
+		items = append(items, k)
+	}
+
+	var toParse strings.Builder
+	for _, item := range items {
+		result := callLightLLM(
+			state.Settings,
+			fmt.Sprintf(`
+			[web page]
+			%s
+			[question]
+			%s	
+			[prompt]
+			Please get relavant information for the question from the web page 
+			`, getRequest(client, item), question),
+			`You get relavant to a question from a web page
+			Rules:
+			- Always return a summary of only information relavant to the user question
+			- Please make sure that you return the whole context for the question
+			- **NEVER** respond with anything that is not code
+			`,
+		)
+		// result := getRequest(client, item)
+		fmt.Fprintf(&toParse, "%s", result.Response)
+	}
+	final_answer := callHeavyLLM(
 		state.Settings,
-		buildPrompt(question, sb.String(), state.Memory),
+		buildPrompt(question, toParse.String(), state.Memory),
 		`You answer quickly and accurately using the provided markdown web pages.
 		Rules:
 		- Please **always provide a link** to the web page that you got your information from.
@@ -262,24 +374,139 @@ func researchMode(state *State, question string) (string, string) {
 
 	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
 
-	return final_answer.Response, links_string
+	return final_answer.Response, strings.Join(items, "\n")
+}
+
+func codeMode(state *State, question string) (string, string) {
+	month := time.Now().Month().String()
+	year := time.Now().Year()
+	client := &http.Client{}
+
+	queriesList := getQueriesFromLightLLM(
+		state.Settings,
+		buildPrompt(question, "", state.Memory),
+		fmt.Sprintf(`You answer quickly and accurately.
+		Rules:
+		- Your job is to turn a question into google queries
+		- The current date is %s %d if the user asks about something happening now
+		- You reply with between 1 and 3 short google queries separated by a newline character
+		- Each query is a sentence built of multiple words
+		- **NEVER** have a query with only one word
+		- Keep the queries short ( between 3 to 5 words )
+		`, month, year)).Queries
+
+	var queries strings.Builder
+
+	for _, query := range queriesList {
+		trimmed := strings.TrimSpace(query)
+		if trimmed == "" {
+			continue
+		}
+		result, _ := searxSearch(client, state.Settings.SearxNGUrl, query, 1)
+		fmt.Fprintf(&queries, "%s", result)
+	}
+
+	links := getLinksFromLightLLM(
+		state.Settings,
+		buildPrompt(question, queries.String(), state.Memory),
+		fmt.Sprintf(
+			`You answer quickly and accurately using the provided markdown web snippets.
+			Rules:
+			- Use the provided markdown web snippets and only the provided markdown web snippets as context
+			- Respond with 1-3 links that the most relavant to the users question and closest to %s %d
+			- Please make sure that you cover all parts of the user's question with the links you provide
+			- Only return links separated by newline characters nothing else
+			`, month, year,
+		),
+	)
+
+	linkList := make(map[string]struct{})
+	for _, link := range links.Links {
+		trimmed := strings.TrimSpace(link)
+		if trimmed == "" {
+			continue
+		}
+		result := getLinksFromLightLLM(
+			state.Settings,
+			buildPrompt(question, getRequest(client, link), state.Memory),
+			fmt.Sprintf(
+				`You answer quickly and accurately using the provided markdown web snippets.
+			Rules:
+			- Use the provided markdown web snippets and only the provided markdown web snippets as context
+			- Respond with 1-3 links that the most relavant to the users question and closest to %s %d
+			- Please make sure that you cover all parts of the user's question with the links you provide
+			- Only return links separated by newline characters nothing else
+			`, month, year,
+			),
+		)
+		for _, l := range result.Links {
+			linkList[l] = struct{}{}
+		}
+		// fmt.Fprintf(&sb, "# Original link: %s\n# Summarized Page:\n%s\n\n", trimmed, result)
+	}
+	items := make([]string, 0, len(linkList))
+	for k := range linkList {
+		items = append(items, k)
+	}
+
+	var toParse strings.Builder
+	for _, item := range items {
+		result := callLightLLM(
+			state.Settings,
+			fmt.Sprintf(`
+			[web page]
+			%s
+			[question]
+			%s	
+			[prompt]
+			Please get relavant code example from this web page
+			`, getRequest(client, item), question),
+			`You get code examples from web pages
+			Rules:
+			- Always only return code examples
+			- Return code examples relavant to the question
+			- **NEVER** respond with anything that is not code
+			`,
+		)
+		// result := getRequest(client, item)
+		fmt.Fprintf(&toParse, "%s", result.Response)
+	}
+	final_answer := callHeavyLLM(
+		state.Settings,
+		buildPrompt(question, toParse.String(), state.Memory),
+		`You answer quickly and accurately using the provided code examples.
+		Rules:
+		- Please **always provide a link** to the web page that you got your information from.
+		- Please **always cite your sources**
+		- Use the provided code examples as context for your answer
+		- If you see information or code not relavant to the question in the page please disregard it
+		- Only reply to the user's question
+		- Respond with information closest to %s %d
+		- Look for dates in provided pages and specify it in your response
+		- Please provide the exact example for the user's question according to the code examples provided, not suggestions to how the user can figure out the answer by themselves.
+		- If you don't find the answer in the provided examples please say so explicitly.
+		- You always respond in markdown
+		`,
+	)
+
+	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
+
+	return final_answer.Response, strings.Join(items, "\n")
 }
 func lookupMode(state *State, question string) string {
 	month := time.Now().Month().String()
 	year := time.Now().Year()
 	client := &http.Client{}
-	google_queries_string := callLLM(
+	lines := getQueriesFromLightLLM(
 		state.Settings,
 		buildPrompt(question, "", state.Memory),
 		fmt.Sprintf(`You answer quickly and accurately.
 		Rules:
-		- Your job is to turn a question into google searches
+		- Your job is to turn a question into google queries
 		- The current date is %s %d if the user asks about something happening now
-		- You reply with between 1 and 3 short google queries separated by a newline character
+		- You reply with between 1 and 3 short google queries
 		- Keep the queries short ( between 3 to 5 words )
-		`, month, year)).Response
-
-	lines := strings.Split(google_queries_string, "\n")
+		`, month, year)).Queries
 
 	var sb strings.Builder
 
@@ -298,7 +525,7 @@ func lookupMode(state *State, question string) string {
 		fmt.Fprintf(&sb, "Original query: %s\n\nAnswer:%s\n\n", query, result)
 	}
 
-	final_answer := callLLM(
+	final_answer := callHeavyLLM(
 		state.Settings,
 		buildPrompt(question, sb.String(), state.Memory),
 		fmt.Sprintf(`You answer quickly and accurately using the provided markdown web snippets.
@@ -323,6 +550,7 @@ const (
 	Research
 	Normal
 	Search
+	Code
 )
 
 func memoryHandler(state *State, command string) {
@@ -378,12 +606,17 @@ func modeHandler(state *State, command string) {
 		fmt.Println("Switched to normal mode")
 		state.OperatingMode = Normal
 	}
+	if command == "c" {
+		fmt.Println("Switched to code mode")
+		state.OperatingMode = Code
+	}
 	if command == "h" {
 		fmt.Println("Mode handler help")
-		fmt.Println("r - research mode (use if you want code examples or have the model deep dive)")
+		fmt.Println("r - research mode (use if you want to have the model deep dive)")
 		fmt.Println("a - auto mode (use if you're not sure what to choose)")
 		fmt.Println("s - search mode (use if you want the model to quickly search the web for current information)")
 		fmt.Println("n - normal mode (use if you want the model to reply by itself)")
+		fmt.Println("c - code mode (Use for accurate code examples)")
 	}
 }
 
@@ -487,7 +720,7 @@ func main() {
 		switch state.OperatingMode {
 		case Auto:
 			fmt.Println("Figuring out the best way to respond!")
-			should_search := callLLM(
+			should_search := callHeavyLLM(
 				settings,
 				fmt.Sprintf("Question: %s", prompt),
 				`You answer quickly and accurately.
@@ -502,7 +735,7 @@ func main() {
 				final_answer = lookupMode(state, prompt)
 			} else {
 				fmt.Println("Answering from memory!")
-				final_answer = callLLM(
+				final_answer = callHeavyLLM(
 					settings,
 					buildPrompt(prompt, "", state.Memory),
 					`You answer quickly and accurately using your own abilities.
@@ -521,7 +754,7 @@ func main() {
 			final_answer = lookupMode(state, prompt)
 		case Normal:
 			fmt.Println("Answering from memory!")
-			answer := callLLM(
+			answer := callHeavyLLM(
 				settings,
 				buildPrompt(prompt, "", state.Memory),
 				`You answer quickly and accurately using your own abilities.
@@ -532,6 +765,10 @@ func main() {
 			)
 			fmt.Printf("Token Count: %d", answer.PromptEvalCount)
 			final_answer = answer.Response
+		case Code:
+			fmt.Println("Coding!")
+			final_answer, sources = codeMode(state, prompt)
+
 		}
 		if state.Remember {
 			if len(state.Memory.Interactions) == 0 {
@@ -576,3 +813,4 @@ func getenv(k, def string) string {
 //TODO: Load last used memory (--resume)
 //TODO: Bug with printing, sometimes it prints both formatted and not formatted (I'm pretty sure it's because we reach maximum context on the links agent
 //TODO: Use gemma3 for faster decisions using format and invopop/jsonschema
+//TODO: Add links to the output of the load page

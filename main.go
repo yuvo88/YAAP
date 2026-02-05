@@ -287,11 +287,9 @@ func getenv(k, def string) string {
 	return def
 }
 
-//TODO: Add links to the output of the load page
 //TODO: jump to top of response on response
 //TODO: Pretty print the timestamps on list
 //TODO: add elapsed time counter
-//TODO: Add logs
 //TODO: enable memory exporting
 //TODO: auto-complete for inline commands
 //TODO: enable multiline prompts

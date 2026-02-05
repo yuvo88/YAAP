@@ -78,7 +78,7 @@ func rememberMemory(state *State) {
 type MemoryDto struct {
 	Id      string
 	Title   string
-	Updated string
+	Updated int64
 }
 
 func resumeLastMemory(state *State) {
@@ -111,14 +111,14 @@ func listMemories(database *sql.DB) {
 	rows, err := database.Query("SELECT * FROM memories ORDER BY updated")
 
 	if err != nil {
-		panic(fmt.Sprintf("Failed to list memories in DB", err))
+		panic(fmt.Sprintf("Failed to list memories in DB, err: %s", err))
 	}
 	defer rows.Close()
 	var memories []MemoryDto
 	for rows.Next() {
 		var memory MemoryDto
 		if err := rows.Scan(&memory.Id, &memory.Title, &memory.Updated); err != nil {
-			panic(fmt.Sprintf("Failed to retreive memories from result", err))
+			panic(fmt.Sprintf("Failed to retreive memories from result, err: %s", err))
 		}
 
 		memories = append(memories, memory)
@@ -129,7 +129,8 @@ func listMemories(database *sql.DB) {
 		panic(fmt.Sprintf("Empty result from database, err: %s", err))
 	}
 	for _, memory := range memories {
-		fmt.Printf("%s | %s | %s\n", memory.Id, memory.Title, memory.Updated)
+		t := time.Unix(memory.Updated, 0).In(time.Local)
+		fmt.Printf("%s | %s | %s\n", memory.Id, memory.Title, t.Format("2006-01-02 15:04:05"))
 	}
 
 }

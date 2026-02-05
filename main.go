@@ -261,10 +261,9 @@ func escapeOutput(input string) string {
 	re := regexp.MustCompile(`[\s\n\t]+`)
 	return re.ReplaceAllString(input, "|")
 }
-func researchMode(state *State, question string) (string, []string) {
+func getLinks(state *State, client *http.Client, question string) []string {
 	month := time.Now().Month().String()
 	year := time.Now().Year()
-	client := &http.Client{}
 
 	queriesList := getQueriesFromLightLLM(
 		state.Settings,
@@ -332,9 +331,15 @@ func researchMode(state *State, question string) (string, []string) {
 	for k := range linkList {
 		items = append(items, k)
 	}
+	return items
+
+}
+func researchMode(state *State, question string) (string, []string) {
+	client := &http.Client{}
+	links := getLinks(state, client, question)
 
 	var toParse strings.Builder
-	for _, item := range items {
+	for _, article := range links {
 		result := callLightLLM(
 			state.Settings,
 			fmt.Sprintf(`
@@ -344,7 +349,7 @@ func researchMode(state *State, question string) (string, []string) {
 			%s	
 			[prompt]
 			Please get relavant information for the question from the web page 
-			`, getRequest(client, item), question),
+			`, getRequest(client, article), question),
 			`You get relavant to a question from a web page
 			Rules:
 			- Always return a summary of only information relavant to the user question
@@ -363,6 +368,7 @@ func researchMode(state *State, question string) (string, []string) {
 		- Please **always provide a link** to the web page that you got your information from.
 		- Please **always cite your sources**
 		- Use the provided links and fetched pages as context
+		- If you don't understand the context of the user's question look for it in the history section
 		- If you see information not relavant to the question in the page please disregard it
 		- Only reply to the user's question
 		- Respond with information closest to %s %d
@@ -375,83 +381,16 @@ func researchMode(state *State, question string) (string, []string) {
 
 	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
 
-	return final_answer.Response, items
+	return final_answer.Response, links
 }
 
 func codeMode(state *State, question string) (string, []string) {
-	month := time.Now().Month().String()
-	year := time.Now().Year()
 	client := &http.Client{}
 
-	queriesList := getQueriesFromLightLLM(
-		state.Settings,
-		buildPrompt(question, "", state.Memory),
-		fmt.Sprintf(`You answer quickly and accurately.
-		Rules:
-		- Your job is to turn a question into google queries
-		- The current date is %s %d if the user asks about something happening now
-		- You reply with between 1 and 3 short google queries separated by a newline character
-		- Each query is a sentence built of multiple words
-		- **NEVER** have a query with only one word
-		- Keep the queries short ( between 3 to 5 words )
-		`, month, year)).Queries
-
-	var queries strings.Builder
-
-	for _, query := range queriesList {
-		trimmed := strings.TrimSpace(query)
-		if trimmed == "" {
-			continue
-		}
-		result, _ := searxSearch(client, state.Settings.SearxNGUrl, query, 1)
-		fmt.Fprintf(&queries, "%s", result)
-	}
-
-	links := getLinksFromLightLLM(
-		state.Settings,
-		buildPrompt(question, queries.String(), state.Memory),
-		fmt.Sprintf(
-			`You answer quickly and accurately using the provided markdown web snippets.
-			Rules:
-			- Use the provided markdown web snippets and only the provided markdown web snippets as context
-			- Respond with 1-3 links that the most relavant to the users question and closest to %s %d
-			- Please make sure that you cover all parts of the user's question with the links you provide
-			- Only return links separated by newline characters nothing else
-			`, month, year,
-		),
-	)
-
-	linkList := make(map[string]struct{})
-	for _, link := range links.Links {
-		trimmed := strings.TrimSpace(link)
-		if trimmed == "" {
-			continue
-		}
-		result := getLinksFromLightLLM(
-			state.Settings,
-			buildPrompt(question, getRequest(client, link), state.Memory),
-			fmt.Sprintf(
-				`You answer quickly and accurately using the provided markdown web snippets.
-			Rules:
-			- Use the provided markdown web snippets and only the provided markdown web snippets as context
-			- Respond with 1-3 links that the most relavant to the users question and closest to %s %d
-			- Please make sure that you cover all parts of the user's question with the links you provide
-			- Only return links separated by newline characters nothing else
-			`, month, year,
-			),
-		)
-		for _, l := range result.Links {
-			linkList[l] = struct{}{}
-		}
-		// fmt.Fprintf(&sb, "# Original link: %s\n# Summarized Page:\n%s\n\n", trimmed, result)
-	}
-	items := make([]string, 0, len(linkList))
-	for k := range linkList {
-		items = append(items, k)
-	}
+	links := getLinks(state, client, question)
 
 	var toParse strings.Builder
-	for _, item := range items {
+	for _, link := range links {
 		result := callLightLLM(
 			state.Settings,
 			fmt.Sprintf(`
@@ -461,7 +400,7 @@ func codeMode(state *State, question string) (string, []string) {
 			%s	
 			[prompt]
 			Please get relavant code example from this web page
-			`, getRequest(client, item), question),
+			`, getRequest(client, link), question),
 			`You get code examples from web pages
 			Rules:
 			- Always only return code examples
@@ -479,6 +418,7 @@ func codeMode(state *State, question string) (string, []string) {
 		Rules:
 		- Please **always provide a link** to the web page that you got your information from.
 		- Please **always cite your sources**
+		- If you don't understand the context of the user's question look for it in the history section
 		- Use the provided code examples as context for your answer
 		- If you see information or code not relavant to the question in the page please disregard it
 		- Only reply to the user's question
@@ -492,7 +432,39 @@ func codeMode(state *State, question string) (string, []string) {
 
 	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
 
-	return final_answer.Response, items
+	return final_answer.Response, links
+}
+func lightCodeMode(state *State, question string) (string, []string) {
+	client := &http.Client{}
+	links := getLinks(state, client, question)
+	var toParse strings.Builder
+	for _, link := range links {
+		result := getRequest(client, link)
+		fmt.Fprintf(&toParse, "%s", result)
+	}
+	final_answer := callLightLLM(
+		state.Settings,
+		fmt.Sprintf(`
+		[web pages]
+		%s
+		[history]
+		%s
+		[question]
+		%s	
+		[prompt]
+		Please get relavant code example from these web pages
+		`, toParse.String(), state.Memory.GetMemoryForModel(), question),
+		`You get code examples from web pages
+		Rules:
+		- Always only return code examples
+		- Return code examples relavant to the question
+		- **NEVER** respond with anything that is not code
+		`,
+	)
+
+	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
+
+	return final_answer.Response, links
 }
 func lookupMode(state *State, question string) string {
 	month := time.Now().Month().String()
@@ -552,6 +524,7 @@ const (
 	Normal
 	Search
 	Code
+	FastCode
 )
 
 func memoryHandler(state *State, command string) {
@@ -625,6 +598,10 @@ func modeHandler(state *State, command string) {
 		fmt.Println("Switched to code mode")
 		state.OperatingMode = Code
 	}
+	if command == "fc" {
+		fmt.Println("Switched to fast code mode")
+		state.OperatingMode = FastCode
+	}
 	if command == "h" {
 		fmt.Println("Mode handler help")
 		fmt.Println("This is the way you can decide what modes your llm works in")
@@ -635,7 +612,8 @@ func modeHandler(state *State, command string) {
 		fmt.Println("  a - auto mode (use if you're not sure what to choose)")
 		fmt.Println("  s - search mode (use if you want the model to quickly search the web for current information)")
 		fmt.Println("  n - normal mode (use if you want the model to reply by itself)")
-		fmt.Println("  c - code mode (Use for accurate code examples)")
+		fmt.Println("  c - code mode (Use for accurate code examples with explanations)")
+		fmt.Println("  fc - fast code mode (Use for quick code prototyping)")
 	}
 }
 
@@ -667,13 +645,13 @@ func commandHandler(state *State, command string) {
 
 func buildPrompt(prompt string, context string, memory Memory) string {
 	return fmt.Sprintf(`
-		[history]
-		%s
 		[context]
+		%s
+		[history]
 		%s
 		[question]
 		%s
-	`, memory.GetMemoryForModel(), context, prompt)
+	`, context, memory.GetMemoryForModel(), prompt)
 }
 
 func main() {
@@ -689,7 +667,7 @@ func main() {
 	)
 	lightModel := flag.String(
 		"light-model",
-		getenv("LIGHT_MODEL", "gemma-64k"),
+		getenv("LIGHT_MODEL", "gemma-128k"),
 		"The name of the model that will run inference",
 	)
 	ollama_url := flag.String(
@@ -712,6 +690,7 @@ func main() {
 		"",
 		"Memory id of memory to load from the list of memories. (--list-memories to see memories)",
 	)
+	fmt.Println(*lightModel)
 	settings := Settings{
 		HeavyModel: *heavyModel,
 		LightModel: *lightModel,
@@ -809,6 +788,9 @@ func main() {
 		case Code:
 			fmt.Println("Coding!")
 			final_answer, sources = codeMode(state, prompt)
+		case FastCode:
+			fmt.Println("Fast Coding!")
+			final_answer, sources = lightCodeMode(state, prompt)
 
 		}
 		if state.Remember {

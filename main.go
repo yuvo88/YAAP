@@ -47,7 +47,7 @@ type State struct {
 func NewState(settings Settings, database *sql.DB, renderer *glamour.TermRenderer) *State {
 	return &State{
 		Settings:      settings,
-		OperatingMode: Auto,
+		OperatingMode: Search,
 		Remember:      true,
 		Database:      database,
 		Renderer:      renderer,
@@ -519,8 +519,7 @@ func lookupMode(state *State, question string) string {
 type OperatingMode int
 
 const (
-	Auto OperatingMode = iota
-	Research
+	Research OperatingMode = iota
 	Normal
 	Search
 	Code
@@ -582,10 +581,6 @@ func modeHandler(state *State, command string) {
 		fmt.Println("Switched to research mode")
 		state.OperatingMode = Research
 	}
-	if command == "a" {
-		fmt.Println("Switched to auto mode")
-		state.OperatingMode = Auto
-	}
 	if command == "s" {
 		fmt.Println("Switched to search mode")
 		state.OperatingMode = Search
@@ -609,7 +604,6 @@ func modeHandler(state *State, command string) {
 		fmt.Println("  /mode <Flag>")
 		fmt.Println("flags:")
 		fmt.Println("  r - research mode (use if you want to have the model deep dive)")
-		fmt.Println("  a - auto mode (use if you're not sure what to choose)")
 		fmt.Println("  s - search mode (use if you want the model to quickly search the web for current information)")
 		fmt.Println("  n - normal mode (use if you want the model to reply by itself)")
 		fmt.Println("  c - code mode (Use for accurate code examples with explanations)")
@@ -690,16 +684,15 @@ func main() {
 		"",
 		"Memory id of memory to load from the list of memories. (--list-memories to see memories)",
 	)
-	fmt.Println(*lightModel)
+	db := initDb()
+	defer db.Close()
+	flag.Parse()
 	settings := Settings{
 		HeavyModel: *heavyModel,
 		LightModel: *lightModel,
 		OllamaUrl:  *ollama_url,
 		SearxNGUrl: *searx_url,
 	}
-	db := initDb()
-	defer db.Close()
-	flag.Parse()
 	r, _ := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
 		glamour.WithWordWrap(-1),
@@ -738,34 +731,6 @@ func main() {
 		var final_answer string
 		var sources []string
 		switch state.OperatingMode {
-		case Auto:
-			fmt.Println("Figuring out the best way to respond!")
-			should_search := callHeavyLLM(
-				settings,
-				fmt.Sprintf("Question: %s", prompt),
-				`You answer quickly and accurately.
-				Rules:
-					- Your job is decide whether a different agent needs to search online
-					- If you feel like you're not sure opt for yes
-					- If the request is to summarize information that you are clearly given in the question answer no
-					- Please answer only in yes or no
-			`).Response
-			if should_search == "yes" {
-				fmt.Println("Looking it up!")
-				final_answer = lookupMode(state, prompt)
-			} else {
-				fmt.Println("Answering from memory!")
-				final_answer = callHeavyLLM(
-					settings,
-					buildPrompt(prompt, "", state.Memory),
-					`You answer quickly and accurately using your own abilities.
-				Rules:
-				- If you don't know the answer always say you don't know
-				- You always respond in markdown
-			`,
-				).Response
-
-			}
 		case Research:
 			fmt.Println("Researching!")
 			final_answer, sources = researchMode(state, prompt)

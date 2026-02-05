@@ -173,6 +173,11 @@ func main() {
 		false,
 		"Should list memories",
 	)
+	delete_memory := flag.String(
+		"delete-memory",
+		"",
+		"Should list memories",
+	)
 	resume := flag.Bool(
 		"resume",
 		false,
@@ -202,6 +207,10 @@ func main() {
 	}
 	state := NewState(settings, db, logFile)
 	state.Logger.Info("Run started")
+	if *delete_memory != "" {
+		deleteMemory(state, *delete_memory)
+		return
+	}
 	if *load_memory != "" {
 		loadMemory(state, *load_memory)
 	}
@@ -288,7 +297,6 @@ func getenv(k, def string) string {
 }
 
 //TODO: jump to top of response on response
-//TODO: Pretty print the timestamps on list
 //TODO: add elapsed time counter
 //TODO: enable memory exporting
 //TODO: auto-complete for inline commands

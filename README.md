@@ -74,7 +74,10 @@ On Windows
 go build -o YAAP.exe .
 ```
 
-## To run
+## Usage
+I personally use this program within Neovim in terminal mode just because I am used to the vim keybinds and it's easier for me to copy answers,
+but this program can be run without Neovim, your mileage may vary.
+
 To get usage instructions
 On Linux and mac
 ```bash
@@ -82,5 +85,5 @@ On Linux and mac
 ```
 On Windows
 ```bash
-./YAAP --help
+YAAP.exe --help
 ```

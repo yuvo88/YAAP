@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 )
 
-const memories_db_name string = ".memories.db"
-const memories_directory_name string = ".memories"
+const memoriesDbName string = ".memories.db"
+const memoriesDirectoryName string = ".memories"
 
 func saveMemory(state *State) {
 	state.Logger.Debug("Saving current memory", slog.String("memory_id", state.Memory.Id))
@@ -23,13 +23,13 @@ func saveMemory(state *State) {
 	if state.Memory.Id == "" {
 		state.Memory.Id = uuid.New().String()
 	}
-	dir := memories_directory_name
-	file_path := filepath.Join(dir, state.Memory.Id)
+	dir := memoriesDirectoryName
+	filePath := filepath.Join(dir, state.Memory.Id)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		state.Logger.Error("Failed to make memory directory", slog.Any("err", err))
 	}
 
-	file, err := os.Create(file_path)
+	file, err := os.Create(filePath)
 	if err != nil {
 		state.Logger.Error("Failed to save memory to directory", slog.Any("err", err))
 	}
@@ -52,14 +52,14 @@ func saveMemory(state *State) {
 		state.Logger.Error("Failed to insert memory into db", slog.Any("err", err))
 	}
 }
-func deleteMemory(state *State, memory_id string) {
-	state.Logger.Debug("Deleting memory", slog.String("memory_id", memory_id))
-	file_path := filepath.Join(memories_directory_name, memory_id)
-	_, err := state.Database.Exec("DELETE FROM memories WHERE id=?", memory_id)
+func deleteMemory(state *State, memoryId string) {
+	state.Logger.Debug("Deleting memory", slog.String("memory_id", memoryId))
+	filePath := filepath.Join(memoriesDirectoryName, memoryId)
+	_, err := state.Database.Exec("DELETE FROM memories WHERE id=?", memoryId)
 	if err != nil {
 		state.Logger.Error("Failed to delete memory from DB", slog.Any("err", err))
 	}
-	err = os.Remove(file_path)
+	err = os.Remove(filePath)
 	if err != nil {
 		state.Logger.Error("Failed to delete memory from disk", slog.Any("err", err))
 	}
@@ -91,8 +91,8 @@ func resumeLastMemory(state *State) {
 		state.Logger.Error("Last memory wasn't found in the database", slog.Any("err", err))
 	}
 
-	file_path := filepath.Join(memories_directory_name, memoryId)
-	file, _ := os.Open(file_path)
+	filePath := filepath.Join(memoriesDirectoryName, memoryId)
+	file, _ := os.Open(filePath)
 	defer file.Close()
 
 	decoder := gob.NewDecoder(file)
@@ -135,10 +135,10 @@ func listMemories(database *sql.DB) {
 
 }
 
-func loadMemory(state *State, memory_id string) {
-	state.Logger.Debug("Loading memory", slog.String("memory_id", memory_id))
-	file_path := filepath.Join(memories_directory_name, memory_id)
-	file, _ := os.Open(file_path)
+func loadMemory(state *State, memoryId string) {
+	state.Logger.Debug("Loading memory", slog.String("memory_id", memoryId))
+	filePath := filepath.Join(memoriesDirectoryName, memoryId)
+	file, _ := os.Open(filePath)
 	defer file.Close()
 
 	decoder := gob.NewDecoder(file)
@@ -147,14 +147,14 @@ func loadMemory(state *State, memory_id string) {
 
 	err := decoder.Decode(&memory)
 	if err != nil {
-		state.Logger.Warn("Memory not found", slog.String("memory_id", memory_id))
+		state.Logger.Warn("Memory not found", slog.String("memory_id", memoryId))
 	}
 	state.Memory = memory
 	state.Memory.PrintMemory(state.Renderer)
 }
 
 func initDb() *sql.DB {
-	db, err := sql.Open("sqlite3", memories_db_name)
+	db, err := sql.Open("sqlite3", memoriesDbName)
 	if err != nil {
 		panic(err)
 	}

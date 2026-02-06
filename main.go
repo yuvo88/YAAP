@@ -37,8 +37,8 @@ func memoryHandler(state *State, command string) {
 
 	if command[:1] == "u" {
 		fmt.Println("Using memory")
-		memory_id := strings.TrimSpace(command[1:])
-		loadMemory(state, memory_id)
+		memoryId := strings.TrimSpace(command[1:])
+		loadMemory(state, memoryId)
 	}
 
 	if command == "n" {
@@ -67,8 +67,8 @@ func memoryHandler(state *State, command string) {
 
 	if command[:1] == "d" {
 		fmt.Println("Deleting memory")
-		memory_id := strings.TrimSpace(command[1:])
-		deleteMemory(state, memory_id)
+		memoryId := strings.TrimSpace(command[1:])
+		deleteMemory(state, memoryId)
 
 	}
 
@@ -122,18 +122,18 @@ func modeHandler(state *State, command string) {
 }
 
 func commandHandler(state *State, command string) {
-	parsed_command := strings.Split(command, " ")
-	command_name := parsed_command[0]
-	switch command_name {
+	parsedCommand := strings.Split(command, " ")
+	commandName := parsedCommand[0]
+	switch commandName {
 	case "exit":
 		saveMemory(state)
 		os.Exit(0)
 	case "current":
 		fmt.Println(state.Memory.Title)
 	case "mode":
-		modeHandler(state, strings.Join(parsed_command[1:], " "))
+		modeHandler(state, strings.Join(parsedCommand[1:], " "))
 	case "memory":
-		memoryHandler(state, strings.Join(parsed_command[1:], " "))
+		memoryHandler(state, strings.Join(parsedCommand[1:], " "))
 	case "help":
 		fmt.Println("YAAP - Yet Another Ai Program")
 		fmt.Println("commands:")
@@ -148,15 +148,15 @@ func commandHandler(state *State, command string) {
 }
 
 func executePrompt(state *State, prompt string) FinalAnswer {
-	var final_answer string
+	var finalAnswer string
 	var sources []string
 	switch state.OperatingMode {
 	case Research:
 		fmt.Println("Researching!")
-		final_answer, sources = researchMode(state, prompt)
+		finalAnswer, sources = researchMode(state, prompt)
 	case Search:
 		fmt.Println("Looking it up!")
-		final_answer = lookupMode(state, prompt)
+		finalAnswer = lookupMode(state, prompt)
 	case Normal:
 		fmt.Println("Answering from memory!")
 		answer := callHeavyLLM(
@@ -169,16 +169,16 @@ func executePrompt(state *State, prompt string) FinalAnswer {
 			`,
 		)
 		fmt.Printf("\nToken Count: %d", answer.PromptEvalCount)
-		final_answer = answer.Response
+		finalAnswer = answer.Response
 	case Code:
 		fmt.Println("Coding!")
-		final_answer, sources = codeMode(state, prompt)
+		finalAnswer, sources = codeMode(state, prompt)
 	case FastCode:
 		fmt.Println("Fast Coding!")
-		final_answer, sources = lightCodeMode(state, prompt)
+		finalAnswer, sources = lightCodeMode(state, prompt)
 
 	}
-	return FinalAnswer{final_answer, sources}
+	return FinalAnswer{finalAnswer, sources}
 }
 
 type FinalAnswer struct {
@@ -205,7 +205,7 @@ func elapsedTime(resultChan chan FinalAnswer, ticker *time.Ticker, start time.Ti
 }
 
 func main() {
-	searx_url := flag.String(
+	searxUrl := flag.String(
 		"searx-url",
 		getenv("SEARXNG_URL", "http://localhost:8080"),
 		"SearxNG server address",
@@ -220,17 +220,17 @@ func main() {
 		getenv("LIGHT_MODEL", "gemma-128k"),
 		"The name of the model that will run inference",
 	)
-	ollama_url := flag.String(
+	ollamaUrl := flag.String(
 		"ollama-url",
 		getenv("OLLAMA_URL", "http://localhost:11434"),
 		"The link to the ollama server",
 	)
-	list_memories := flag.Bool(
+	shouldListMemories := flag.Bool(
 		"list-memories",
 		false,
 		"Should list memories",
 	)
-	delete_memory := flag.String(
+	memoryToDelete := flag.String(
 		"delete-memory",
 		"",
 		"Should list memories",
@@ -240,7 +240,7 @@ func main() {
 		false,
 		"Should resume last session",
 	)
-	load_memory := flag.String(
+	memoryToLoad := flag.String(
 		"load-memory",
 		"",
 		"Memory id of memory to load from the list of memories. (--list-memories to see memories)",
@@ -251,10 +251,10 @@ func main() {
 	settings := Settings{
 		HeavyModel: *heavyModel,
 		LightModel: *lightModel,
-		OllamaUrl:  *ollama_url,
-		SearxNGUrl: *searx_url,
+		OllamaUrl:  *ollamaUrl,
+		SearxNGUrl: *searxUrl,
 	}
-	if *list_memories {
+	if *shouldListMemories {
 		listMemories(db)
 		return
 	}
@@ -264,12 +264,12 @@ func main() {
 	}
 	state := NewState(settings, db, logFile)
 	state.Logger.Info("Run started")
-	if *delete_memory != "" {
-		deleteMemory(state, *delete_memory)
+	if *memoryToDelete != "" {
+		deleteMemory(state, *memoryToDelete)
 		return
 	}
-	if *load_memory != "" {
-		loadMemory(state, *load_memory)
+	if *memoryToLoad != "" {
+		loadMemory(state, *memoryToLoad)
 	}
 
 	if *resume {

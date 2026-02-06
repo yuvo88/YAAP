@@ -28,7 +28,9 @@ type Decision struct {
 	Decision bool `json:"decision"`
 }
 
-func ollamaGenerate(ctx context.Context, client *http.Client, baseURL, model, system string, prompt string, format *jsonschema.Schema) (*LLMResponse, error) {
+func ollamaGenerate(client *http.Client, baseURL, model, system string, prompt string, format *jsonschema.Schema) (*LLMResponse, error) {
+	ctx, cancelLLM := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancelLLM()
 	out := &LLMResponse{}
 	reqBody := map[string]any{
 		"model":  model,
@@ -64,13 +66,11 @@ func ollamaGenerate(ctx context.Context, client *http.Client, baseURL, model, sy
 	return out, nil
 }
 
-func getDecisionFromLightLLM(model_settings Settings, prompt string, system string) *Decision {
+func getDecisionFromLightLLM(modelSettings Settings, prompt string, system string) *Decision {
 	client := &http.Client{}
-	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
-	defer cancelLLM()
 	schema := jsonschema.Reflect(&Decision{})
 
-	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, "gemma-128k", system, prompt, schema)
+	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, "gemma-128k", system, prompt, schema)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)
@@ -80,13 +80,11 @@ func getDecisionFromLightLLM(model_settings Settings, prompt string, system stri
 
 	return decision
 }
-func getQueriesFromLightLLM(model_settings Settings, prompt string, system string) *QueriesList {
+func getQueriesFromLightLLM(modelSettings Settings, prompt string, system string) *QueriesList {
 	client := &http.Client{}
-	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
-	defer cancelLLM()
 	schema := jsonschema.Reflect(&QueriesList{})
 
-	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.LightModel, system, prompt, schema)
+	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, schema)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)
@@ -96,13 +94,11 @@ func getQueriesFromLightLLM(model_settings Settings, prompt string, system strin
 
 	return queries
 }
-func getLinksFromLightLLM(model_settings Settings, prompt string, system string) *LinksList {
+func getLinksFromLightLLM(modelSettings Settings, prompt string, system string) *LinksList {
 	client := &http.Client{}
-	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
-	defer cancelLLM()
 	schema := jsonschema.Reflect(&LinksList{})
 
-	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.LightModel, system, prompt, schema)
+	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, schema)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)
@@ -112,11 +108,9 @@ func getLinksFromLightLLM(model_settings Settings, prompt string, system string)
 
 	return linksList
 }
-func callLightLLM(model_settings Settings, prompt string, system string) *LLMResponse {
+func callLightLLM(modelSettings Settings, prompt string, system string) *LLMResponse {
 	client := &http.Client{}
-	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
-	defer cancelLLM()
-	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.LightModel, system, prompt, nil)
+	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, nil)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)
@@ -124,11 +118,9 @@ func callLightLLM(model_settings Settings, prompt string, system string) *LLMRes
 
 	return answer
 }
-func callHeavyLLM(model_settings Settings, prompt string, system string) *LLMResponse {
+func callHeavyLLM(modelSettings Settings, prompt string, system string) *LLMResponse {
 	client := &http.Client{}
-	llmCtx, cancelLLM := context.WithTimeout(context.Background(), 3600*time.Second)
-	defer cancelLLM()
-	answer, err := ollamaGenerate(llmCtx, client, model_settings.OllamaUrl, model_settings.HeavyModel, system, prompt, nil)
+	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.HeavyModel, system, prompt, nil)
 	if err != nil {
 		fmt.Println("LLM failed:", err)
 		os.Exit(1)

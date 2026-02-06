@@ -310,16 +310,12 @@ func main() {
 		}
 
 		out, err := state.Renderer.Render(answer.FinalAnswer)
-		elapsed := time.Since(start)
 		if err != nil {
 			fmt.Println(answer.FinalAnswer)
 		} else {
 			fmt.Println(out)
 		}
 		fmt.Println(strings.Join(answer.Sources, "\n"))
-
-		fmt.Println("Took:", elapsed)
-
 	}
 }
 

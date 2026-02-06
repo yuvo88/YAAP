@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/google/uuid"
+	_ "github.com/mattn/go-sqlite3"
 	"log/slog"
 	"os"
 	"strings"
 	"time"
-	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 type Settings struct {
@@ -147,6 +147,60 @@ func commandHandler(state *State, command string) {
 
 }
 
+func executePrompt(state *State, prompt string) FinalAnswer {
+	var final_answer string
+	var sources []string
+	switch state.OperatingMode {
+	case Research:
+		fmt.Println("Researching!")
+		final_answer, sources = researchMode(state, prompt)
+	case Search:
+		fmt.Println("Looking it up!")
+		final_answer = lookupMode(state, prompt)
+	case Normal:
+		fmt.Println("Answering from memory!")
+		answer := callHeavyLLM(
+			state.Settings,
+			buildPrompt(prompt, "", state.Memory),
+			`You answer quickly and accurately using your own abilities.
+				Rules:
+				- If you don't know the answer always say you don't know
+				- You always respond in markdown
+			`,
+		)
+		fmt.Printf("\nToken Count: %d", answer.PromptEvalCount)
+		final_answer = answer.Response
+	case Code:
+		fmt.Println("Coding!")
+		final_answer, sources = codeMode(state, prompt)
+	case FastCode:
+		fmt.Println("Fast Coding!")
+		final_answer, sources = lightCodeMode(state, prompt)
+
+	}
+	return FinalAnswer{final_answer, sources}
+}
+
+type FinalAnswer struct {
+	FinalAnswer string
+	Sources     []string
+}
+
+func elapsedTime(resultChan chan FinalAnswer, ticker *time.Ticker, start time.Time) FinalAnswer {
+	for {
+		select {
+		case <-ticker.C:
+			elapsed := time.Since(start)
+			fmt.Printf("\x1b[?2K")
+			fmt.Printf("\r")
+			fmt.Printf("Elapsed: %s", elapsed)
+
+		case answer := <-resultChan:
+			return answer
+		}
+	}
+}
+
 func main() {
 	searx_url := flag.String(
 		"searx-url",
@@ -218,7 +272,10 @@ func main() {
 	if *resume {
 		resumeLastMemory(state)
 	}
+	resultChan := make(chan FinalAnswer)
 
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 	for {
 		fmt.Print("> ")
 		reader := bufio.NewReader(os.Stdin)
@@ -237,52 +294,26 @@ func main() {
 		}
 
 		start := time.Now()
-		var final_answer string
-		var sources []string
-		switch state.OperatingMode {
-		case Research:
-			fmt.Println("Researching!")
-			final_answer, sources = researchMode(state, prompt)
-		case Search:
-			fmt.Println("Looking it up!")
-			final_answer = lookupMode(state, prompt)
-		case Normal:
-			fmt.Println("Answering from memory!")
-			answer := callHeavyLLM(
-				settings,
-				buildPrompt(prompt, "", state.Memory),
-				`You answer quickly and accurately using your own abilities.
-				Rules:
-				- If you don't know the answer always say you don't know
-				- You always respond in markdown
-			`,
-			)
-			fmt.Printf("Token Count: %d", answer.PromptEvalCount)
-			final_answer = answer.Response
-		case Code:
-			fmt.Println("Coding!")
-			final_answer, sources = codeMode(state, prompt)
-		case FastCode:
-			fmt.Println("Fast Coding!")
-			final_answer, sources = lightCodeMode(state, prompt)
-
-		}
+		go func() {
+			resultChan <- executePrompt(state, prompt)
+		}()
+		answer := elapsedTime(resultChan, ticker, start)
 		if state.Remember {
 			if len(state.Memory.Interactions) == 0 {
 				state.Memory.Title = prompt
 				state.Memory.Id = uuid.New().String()
 			}
-			state.Memory.Interactions = append(state.Memory.Interactions, ChatInteraction{Question: prompt, Answer: final_answer, Links: sources})
+			state.Memory.Interactions = append(state.Memory.Interactions, ChatInteraction{Question: prompt, Answer: answer.FinalAnswer, Links: answer.Sources})
 		}
 
-		out, err := state.Renderer.Render(final_answer)
+		out, err := state.Renderer.Render(answer.FinalAnswer)
 		elapsed := time.Since(start)
 		if err != nil {
-			fmt.Println(final_answer)
+			fmt.Println(answer.FinalAnswer)
 		} else {
 			fmt.Println(out)
 		}
-		fmt.Println(strings.Join(sources, "\n"))
+		fmt.Println(strings.Join(answer.Sources, "\n"))
 
 		fmt.Println("Took:", elapsed)
 
@@ -297,9 +328,6 @@ func getenv(k, def string) string {
 }
 
 //TODO: jump to top of response on response
-//TODO: add elapsed time counter
 //TODO: enable memory exporting
 //TODO: auto-complete for inline commands
 //TODO: enable multiline prompts
-//TODO: Make workspaces for different conversations
-//TODO: figure out how to make auto mode decide whether to research

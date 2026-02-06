@@ -139,7 +139,7 @@ func researchMode(state *State, question string) (string, []string) {
 		`,
 	)
 
-	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
+	fmt.Printf("\nToken count: %d\n", final_answer.PromptEvalCount)
 
 	return final_answer.Response, links
 }
@@ -191,7 +191,7 @@ func codeMode(state *State, question string) (string, []string) {
 		`,
 	)
 
-	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
+	fmt.Printf("\nToken count: %d\n", final_answer.PromptEvalCount)
 
 	return final_answer.Response, links
 }
@@ -224,7 +224,7 @@ func lightCodeMode(state *State, question string) (string, []string) {
 		`,
 	)
 
-	fmt.Printf("Token count: %d\n", final_answer.PromptEvalCount)
+	fmt.Printf("\nToken count: %d\n", final_answer.PromptEvalCount)
 
 	return final_answer.Response, links
 }
@@ -275,6 +275,6 @@ func lookupMode(state *State, question string) string {
 		- You always respond in markdown
 		`, month, year),
 	)
-	fmt.Printf("Token Count: %d", final_answer.PromptEvalCount)
+	fmt.Printf("\nToken Count: %d", final_answer.PromptEvalCount)
 	return final_answer.Response
 }

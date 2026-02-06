@@ -76,6 +76,7 @@ go build -o YAAP.exe .
 
 ## Usage
 I personally use this program within Neovim in terminal mode just because I am used to the vim keybinds and it's easier for me to copy answers,
+Additionally I recommend to use it with something like [rlwrap](https://github.com/hanslub42/rlwrap) to allow for KEYUP for previously used command.
 but this program can be run without Neovim, your mileage may vary.
 
 To get usage instructions

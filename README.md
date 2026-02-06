@@ -9,7 +9,7 @@ It is meant to create a private, personal and usable ChatGPT like experience wit
 This is a work in progress and is meant for personal use, and as such I will not promise any features.
 
 ### Modes
-A local LLM chat decides whether to search the web or how hard to think, I think this is suboptimal.
+A normal LLM chat decides whether to search the web or how hard to think, I think this is suboptimal.
 The user knows what it wants the bot to do the best, modes let you control what and how much of it your model does.
 There are several modes of operation that can be used:
 

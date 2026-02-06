@@ -55,12 +55,12 @@ func memoryHandler(state *State, command string) {
 		resumeLastMemory(state)
 	}
 	if command == "rf" {
-		fmt.Println("Resuming last memory")
+		fmt.Println("Resuming last memory and not remembering this session")
 		resumeLastMemory(state)
 	}
 
 	if command == "nf" {
-		fmt.Println("Creating a new memory and forgetting")
+		fmt.Println("Creating a new memory and not remembering this session")
 		forgetMemory(state)
 		rememberMemory(state)
 	}
@@ -79,7 +79,7 @@ func memoryHandler(state *State, command string) {
 		fmt.Println("  /memory <Flag> <Flag Value>")
 		fmt.Println("Flags:")
 		fmt.Println("  l - list memories")
-		fmt.Println("  u - use memory - value UUID")
+		fmt.Println("  u <Memory Id> - Load a specific memory")
 		fmt.Println("  r - Resume last memory")
 		fmt.Println("  rf - Rusume last memory and don't save the old one")
 		fmt.Println("  n - create a new memory and save the old one")
@@ -191,9 +191,12 @@ func elapsedTime(resultChan chan FinalAnswer, ticker *time.Ticker, start time.Ti
 		select {
 		case <-ticker.C:
 			elapsed := time.Since(start)
-			fmt.Printf("\x1b[?2K")
-			fmt.Printf("\r")
-			fmt.Printf("Elapsed: %s", elapsed)
+			if elapsed.Seconds() > 0.3 {
+				fmt.Printf("\x1b[?2K")
+				fmt.Printf("\r")
+				fmt.Printf("Elapsed: %s", elapsed.Round(time.Second))
+
+			}
 
 		case answer := <-resultChan:
 			return answer

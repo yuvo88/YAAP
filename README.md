@@ -26,12 +26,21 @@ In the program
 ```
 
 ### Memories
-You local agent remembers your conversations, only if you want it to.
+Your local agent remembers your conversations, only if you want it to.
 
 Usage:
 In the program
 ```
 /memory h
+```
+
+### Files
+Your local agent has the ability to operate with file context that you give it
+
+Usage:
+In the program
+```
+/file
 ```
 
 ### All commands
@@ -87,4 +96,16 @@ On Linux and mac
 On Windows
 ```bash
 YAAP.exe --help
+```
+
+### Multi-line prompts
+To use multi-line prompts you can use the special sequence `!@#` (It is so weird to avoid collisions with programming language syntax)
+Example:
+```
+!@#
+whatever
+prompt
+you
+want
+!@#
 ```

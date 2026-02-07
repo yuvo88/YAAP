@@ -59,6 +59,7 @@ func getLinks(state *State, client *http.Client, question string) []string {
 		- Your job is to turn a question into google queries
 		- The current date is %s %d if the user asks about something happening now
 		- You reply with between 1 and 3 short google queries separated by a newline character
+		- If the question references a file look at [file]
 		- Each query is a sentence built of multiple words
 		- **NEVER** have a query with only one word
 		- Keep the queries short ( between 3 to 5 words )
@@ -82,6 +83,7 @@ func getLinks(state *State, client *http.Client, question string) []string {
 			`You answer quickly and accurately using the provided markdown web snippets.
 			Rules:
 			- Use the provided markdown web snippets and only the provided markdown web snippets as context
+			- If the question references a file look at [file]
 			- Respond with 1-3 links that the most relavant to the users question and closest to %s %d
 			- Please make sure that you cover all parts of the user's question with the links you provide
 			- Only return links separated by newline characters nothing else
@@ -102,6 +104,7 @@ func getLinks(state *State, client *http.Client, question string) []string {
 				`You answer quickly and accurately using the provided markdown web snippets.
 			Rules:
 			- Use the provided markdown web snippets and only the provided markdown web snippets as context
+			- If the question references a file look at [file]
 			- Respond with 1-3 links that the most relavant to the users question and closest to %s %d
 			- Please make sure that you cover all parts of the user's question with the links you provide
 			- Only return links separated by newline characters nothing else
@@ -158,6 +161,7 @@ func researchMode(state *State, question string) (string, []string) {
 		- Please **always cite your sources**
 		- Use the provided links and fetched pages as context
 		- If you don't understand the context of the user's question look for it in the history section
+		- If the question references a file look at [file]
 		- If you see information not relavant to the question in the page please disregard it
 		- Only reply to the user's question
 		- Respond with information closest to %s %d
@@ -210,6 +214,7 @@ func codeMode(state *State, question string) (string, []string) {
 		- Please **always cite your sources**
 		- If you don't understand the context of the user's question look for it in the history section
 		- Use the provided code examples as context for your answer
+		- If the question references a file look at [file]
 		- If you see information or code not relavant to the question in the page please disregard it
 		- Only reply to the user's question
 		- Respond with information closest to %s %d
@@ -270,6 +275,7 @@ func lookupMode(state *State, question string) string {
 		- Your job is to turn a question into google queries
 		- The current date is %s %d if the user asks about something happening now
 		- You reply with between 1 and 3 short google queries
+		- If the question references a file look at [file]
 		- Keep the queries short ( between 3 to 5 words )
 		`, month, year)).Queries
 
@@ -298,6 +304,7 @@ func lookupMode(state *State, question string) string {
 		- Please **always provide a link** to the article that you got your information from.
 		- Please **always cite your sources**
 		- Respond with information closest to %s %d
+		- If the question references a file look at [file]
 		- Use the provided original queries and responses as context
 		- Please provide the exact answer for the user's question according to the markdown web snippets provided, not suggestions to how the user can figure out the answer by themselves.
 		- If you don't find the answer in the provided markdown web snippets please say so explicitly.

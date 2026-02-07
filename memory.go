@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -130,7 +131,11 @@ func listMemories(database *sql.DB) {
 	}
 	for _, memory := range memories {
 		t := time.Unix(memory.Updated, 0).In(time.Local)
-		fmt.Printf("%s | %s | %s\n", memory.Id, memory.Title, t.Format("2006-01-02 15:04:05"))
+		title := strings.ReplaceAll(memory.Title, "\n", "\\n")
+		if len(title) > 100 {
+			title = title[:100]
+		}
+		fmt.Printf("%s | %s | %s\n", memory.Id, title, t.Format("2006-01-02 15:04:05"))
 	}
 
 }

@@ -230,6 +230,39 @@ func elapsedTime(resultChan chan FinalAnswer, ticker *time.Ticker, start time.Ti
 	}
 }
 
+func getPrompt(state *State) string {
+	fmt.Print("> ")
+	reader := bufio.NewReader(os.Stdin)
+	terminator := "!@#"
+
+	prompt, err := reader.ReadString('\n')
+	if err != nil {
+		state.Logger.Error("Couldn't read user input", slog.Any("err", err))
+	}
+	prompt = strings.TrimSpace(prompt)
+	if prompt == terminator {
+		var multiLinePrompt strings.Builder
+		for {
+			prompt, err = reader.ReadString('\n')
+			prompt = strings.TrimSpace(prompt)
+			if err != nil {
+				state.Logger.Error("Couldn't read user input", slog.Any("err", err))
+				break
+			}
+			if prompt == terminator {
+				break
+			}
+
+			fmt.Fprintf(&multiLinePrompt, "%s\n", prompt)
+		}
+		return multiLinePrompt.String()
+
+	}
+
+	return prompt
+
+}
+
 func main() {
 	searxUrl := flag.String(
 		"searx-url",
@@ -306,14 +339,7 @@ func main() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
-		fmt.Print("> ")
-		reader := bufio.NewReader(os.Stdin)
-
-		prompt, err := reader.ReadString('\n')
-		if err != nil {
-			state.Logger.Error("Couldn't read user input", slog.Any("err", err))
-		}
-		prompt = strings.TrimSpace(prompt)
+		prompt := getPrompt(state)
 		if prompt == "" {
 			continue
 		}

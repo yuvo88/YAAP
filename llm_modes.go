@@ -3,19 +3,45 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
 
-func buildPrompt(prompt string, context string, memory Memory) string {
+func buildPrompt(state *State, prompt string, context string) string {
+	if state.FileName == "" {
+		return fmt.Sprintf(`
+			[context]
+			%s
+			[history]
+			%s
+			[question]
+			%s
+		`, context, state.Memory.GetMemoryForModel(), prompt)
+	}
+	fileContent, err := os.ReadFile(state.FileName)
+	if err != nil {
+		return fmt.Sprintf(`
+			[context]
+			%s
+			[history]
+			%s
+			[question]
+			%s
+			`, context, state.Memory.GetMemoryForModel(), prompt) // TODO: Return err
+	}
+
 	return fmt.Sprintf(`
 		[context]
+		%s
+		[file]
 		%s
 		[history]
 		%s
 		[question]
 		%s
-	`, context, memory.GetMemoryForModel(), prompt)
+	`, context, string(fileContent), state.Memory.GetMemoryForModel(), prompt)
+
 }
 func getLinks(state *State, client *http.Client, question string) []string {
 	state.Logger.Debug("Getting links")
@@ -24,7 +50,7 @@ func getLinks(state *State, client *http.Client, question string) []string {
 
 	queriesList := getQueriesFromLightLLM(
 		state.Settings,
-		buildPrompt(question, "", state.Memory),
+		buildPrompt(state, question, ""),
 		fmt.Sprintf(`You answer quickly and accurately.
 		Rules:
 		- Your job is to turn a question into google queries
@@ -48,7 +74,7 @@ func getLinks(state *State, client *http.Client, question string) []string {
 
 	links := getLinksFromLightLLM(
 		state.Settings,
-		buildPrompt(question, queries.String(), state.Memory),
+		buildPrompt(state, question, queries.String()),
 		fmt.Sprintf(
 			`You answer quickly and accurately using the provided markdown web snippets.
 			Rules:
@@ -68,7 +94,7 @@ func getLinks(state *State, client *http.Client, question string) []string {
 		}
 		result := getLinksFromLightLLM(
 			state.Settings,
-			buildPrompt(question, getRequest(client, link), state.Memory),
+			buildPrompt(state, question, getRequest(client, link)),
 			fmt.Sprintf(
 				`You answer quickly and accurately using the provided markdown web snippets.
 			Rules:
@@ -120,9 +146,9 @@ func researchMode(state *State, question string) (string, []string) {
 		fmt.Fprintf(&toParse, "%s", result.Response)
 	}
 	state.Logger.Debug("Preparing final response")
-	final_answer := callHeavyLLM(
+	finalAnswer := callHeavyLLM(
 		state.Settings,
-		buildPrompt(question, toParse.String(), state.Memory),
+		buildPrompt(state, question, toParse.String()),
 		`You answer quickly and accurately using the provided markdown web pages.
 		Rules:
 		- Please **always provide a link** to the web page that you got your information from.
@@ -139,9 +165,9 @@ func researchMode(state *State, question string) (string, []string) {
 		`,
 	)
 
-	fmt.Printf("\nToken count: %d\n", final_answer.PromptEvalCount)
+	fmt.Printf("\nToken count: %d\n", finalAnswer.PromptEvalCount)
 
-	return final_answer.Response, links
+	return finalAnswer.Response, links
 }
 
 func codeMode(state *State, question string) (string, []string) {
@@ -172,9 +198,9 @@ func codeMode(state *State, question string) (string, []string) {
 		// result := getRequest(client, item)
 		fmt.Fprintf(&toParse, "%s", result.Response)
 	}
-	final_answer := callHeavyLLM(
+	finalAnswer := callHeavyLLM(
 		state.Settings,
-		buildPrompt(question, toParse.String(), state.Memory),
+		buildPrompt(state, question, toParse.String()),
 		`You answer quickly and accurately using the provided code examples.
 		Rules:
 		- Please **always provide a link** to the web page that you got your information from.
@@ -191,9 +217,9 @@ func codeMode(state *State, question string) (string, []string) {
 		`,
 	)
 
-	fmt.Printf("\nToken count: %d\n", final_answer.PromptEvalCount)
+	fmt.Printf("\nToken count: %d\n", finalAnswer.PromptEvalCount)
 
-	return final_answer.Response, links
+	return finalAnswer.Response, links
 }
 func lightCodeMode(state *State, question string) (string, []string) {
 	state.Logger.Debug("Triggering light code mode")
@@ -204,7 +230,7 @@ func lightCodeMode(state *State, question string) (string, []string) {
 		result := getRequest(client, link)
 		fmt.Fprintf(&toParse, "%s", result)
 	}
-	final_answer := callLightLLM(
+	finalAnswer := callLightLLM(
 		state.Settings,
 		fmt.Sprintf(`
 		[web pages]
@@ -224,9 +250,9 @@ func lightCodeMode(state *State, question string) (string, []string) {
 		`,
 	)
 
-	fmt.Printf("\nToken count: %d\n", final_answer.PromptEvalCount)
+	fmt.Printf("\nToken count: %d\n", finalAnswer.PromptEvalCount)
 
-	return final_answer.Response, links
+	return finalAnswer.Response, links
 }
 func lookupMode(state *State, question string) string {
 	state.Logger.Debug("Triggering lookup mode")
@@ -235,7 +261,7 @@ func lookupMode(state *State, question string) string {
 	client := &http.Client{}
 	lines := getQueriesFromLightLLM(
 		state.Settings,
-		buildPrompt(question, "", state.Memory),
+		buildPrompt(state, question, ""),
 		fmt.Sprintf(`You answer quickly and accurately.
 		Rules:
 		- Your job is to turn a question into google queries
@@ -261,9 +287,9 @@ func lookupMode(state *State, question string) string {
 		fmt.Fprintf(&sb, "Original query: %s\n\nAnswer:%s\n\n", query, result)
 	}
 
-	final_answer := callHeavyLLM(
+	finalAnswer := callHeavyLLM(
 		state.Settings,
-		buildPrompt(question, sb.String(), state.Memory),
+		buildPrompt(state, question, sb.String()),
 		fmt.Sprintf(`You answer quickly and accurately using the provided markdown web snippets.
 		Rules:
 		- Please **always provide a link** to the article that you got your information from.
@@ -275,6 +301,6 @@ func lookupMode(state *State, question string) string {
 		- You always respond in markdown
 		`, month, year),
 	)
-	fmt.Printf("\nToken Count: %d", final_answer.PromptEvalCount)
-	return final_answer.Response
+	fmt.Printf("\nToken Count: %d", finalAnswer.PromptEvalCount)
+	return finalAnswer.Response
 }

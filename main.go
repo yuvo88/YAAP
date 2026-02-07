@@ -120,7 +120,30 @@ func modeHandler(state *State, command string) {
 		fmt.Println("  fc - fast code mode (Use for quick code prototyping)")
 	}
 }
-
+func fileHandler(state *State, command string) {
+	if command[0] == 'o' {
+		fileName := strings.TrimSpace(command[1:])
+		fmt.Printf("Reading file %s\n", fileName)
+		state.FileName = fileName
+	}
+	if command == "d" {
+		fmt.Println("Discarding file")
+		state.FileName = ""
+	}
+	if command == "c" {
+		fmt.Println(state.FileName)
+	}
+	if command == "h" {
+		fmt.Println("File handler help")
+		fmt.Println("This is the way to give your agent file context")
+		fmt.Println("Usage:")
+		fmt.Println("  /file <Flag>")
+		fmt.Println("flags:")
+		fmt.Println("  o <File Name> - File to have the LLM answer by")
+		fmt.Println("  d - Discard file you're using")
+		fmt.Println("  c - Print current file you're working on")
+	}
+}
 func commandHandler(state *State, command string) {
 	parsedCommand := strings.Split(command, " ")
 	commandName := parsedCommand[0]
@@ -134,11 +157,14 @@ func commandHandler(state *State, command string) {
 		modeHandler(state, strings.Join(parsedCommand[1:], " "))
 	case "memory":
 		memoryHandler(state, strings.Join(parsedCommand[1:], " "))
+	case "file":
+		fileHandler(state, strings.Join(parsedCommand[1:], " "))
 	case "help":
 		fmt.Println("YAAP - Yet Another Ai Program")
 		fmt.Println("commands:")
 		fmt.Println("  /mode: change the execution mode (/mode h) for help")
 		fmt.Println("  /memory: memory commands (/memory h) for help")
+		fmt.Println("  /file: file commands (/file h) for help")
 		fmt.Println("  /current: look at the name of the current loaded memory")
 		fmt.Println("  /exit: exit the program")
 	default:
@@ -161,7 +187,7 @@ func executePrompt(state *State, prompt string) FinalAnswer {
 		fmt.Println("Answering from memory!")
 		answer := callHeavyLLM(
 			state.Settings,
-			buildPrompt(prompt, "", state.Memory),
+			buildPrompt(state, prompt, ""),
 			`You answer quickly and accurately using your own abilities.
 				Rules:
 				- If you don't know the answer always say you don't know

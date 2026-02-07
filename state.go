@@ -16,6 +16,7 @@ type State struct {
 	Database      *sql.DB
 	Renderer      *glamour.TermRenderer
 	Logger        *slog.Logger
+	FileName string
 }
 
 func NewState(settings Settings, database *sql.DB, logFile *os.File) *State {

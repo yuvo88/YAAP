@@ -72,8 +72,7 @@ func getDecisionFromLightLLM(modelSettings Settings, prompt string, system strin
 
 	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, "gemma-128k", system, prompt, schema)
 	if err != nil {
-		fmt.Println("LLM failed:", err)
-		os.Exit(1)
+		fmt.Println("\nLLM failed:", err)
 	}
 	decision := &Decision{}
 	json.Unmarshal([]byte(answer.Response), decision)
@@ -86,8 +85,7 @@ func getQueriesFromLightLLM(modelSettings Settings, prompt string, system string
 
 	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, schema)
 	if err != nil {
-		fmt.Println("LLM failed:", err)
-		os.Exit(1)
+		fmt.Println("\nLLM failed:", err)
 	}
 	queries := &QueriesList{}
 	json.Unmarshal([]byte(answer.Response), queries)
@@ -100,8 +98,7 @@ func getLinksFromLightLLM(modelSettings Settings, prompt string, system string) 
 
 	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, schema)
 	if err != nil {
-		fmt.Println("LLM failed:", err)
-		os.Exit(1)
+		fmt.Println("\nLLM failed:", err)
 	}
 	linksList := &LinksList{}
 	json.Unmarshal([]byte(answer.Response), linksList)
@@ -112,8 +109,7 @@ func callLightLLM(modelSettings Settings, prompt string, system string) *LLMResp
 	client := &http.Client{}
 	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, nil)
 	if err != nil {
-		fmt.Println("LLM failed:", err)
-		os.Exit(1)
+		fmt.Println("\nLLM failed:", err)
 	}
 
 	return answer
@@ -122,8 +118,7 @@ func callHeavyLLM(modelSettings Settings, prompt string, system string) *LLMResp
 	client := &http.Client{}
 	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.HeavyModel, system, prompt, nil)
 	if err != nil {
-		fmt.Println("LLM failed:", err)
-		os.Exit(1)
+		fmt.Println("\nLLM failed:", err)
 	}
 
 	return answer

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -21,6 +22,7 @@ func buildPrompt(state *State, prompt string, context string) string {
 	}
 	fileContent, err := os.ReadFile(state.FileName)
 	if err != nil {
+		state.Logger.Warn("Failed to read file", slog.String("fileName", state.FileName), slog.Any("err", err))
 		return fmt.Sprintf(`
 			[context]
 			%s
@@ -30,6 +32,7 @@ func buildPrompt(state *State, prompt string, context string) string {
 			%s
 			`, context, state.Memory.GetMemoryForModel(), prompt) // TODO: Return err
 	}
+
 
 	return fmt.Sprintf(`
 		[context]

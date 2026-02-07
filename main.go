@@ -381,4 +381,3 @@ func getenv(k, def string) string {
 //TODO: jump to top of response on response
 //TODO: enable memory exporting
 //TODO: auto-complete for inline commands
-//TODO: enable multiline prompts

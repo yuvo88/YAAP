@@ -231,7 +231,7 @@ func elapsedTime(resultChan chan FinalAnswer, ticker *time.Ticker, start time.Ti
 }
 
 func getPrompt(state *State) string {
-	fmt.Print("> ")
+	fmt.Print(">>>> ")
 	reader := bufio.NewReader(os.Stdin)
 	terminator := "!@#"
 

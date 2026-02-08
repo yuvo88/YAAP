@@ -36,7 +36,7 @@ func (self Memory) GetMemoryForModel() string {
 }
 func (self Memory) PrintMemory(renderer *glamour.TermRenderer) {
 	for _, interaction := range self.Interactions {
-		fmt.Printf("> %s\n", interaction.Question)
+		fmt.Printf(">>>> %s\n", interaction.Question)
 		markdown, _ := renderer.Render(interaction.Answer)
 		fmt.Println(markdown)
 		fmt.Println(strings.Join(interaction.Links, "\n"))

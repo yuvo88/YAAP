@@ -27,9 +27,7 @@ type Decision struct {
 	Decision bool `json:"decision"`
 }
 
-func ollamaGenerate(client *http.Client, baseURL, model, system string, prompt string, format *jsonschema.Schema) (*LLMResponse, error) {
-	ctx, cancelLLM := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancelLLM()
+func ollamaGenerate(client *http.Client, baseURL, model, system string, prompt string, format *jsonschema.Schema, ctx context.Context) (*LLMResponse, error) {
 	out := &LLMResponse{}
 	reqBody := map[string]any{
 		"model":  model,
@@ -69,7 +67,9 @@ func getDecisionFromLightLLM(modelSettings Settings, prompt string, system strin
 	client := &http.Client{}
 	schema := jsonschema.Reflect(&Decision{})
 
-	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, "gemma-128k", system, prompt, schema)
+	ctx, cancelLLM := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelLLM()
+	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, "gemma-128k", system, prompt, schema, ctx)
 	if err != nil {
 		fmt.Println("\nLLM failed:", err)
 	}
@@ -82,7 +82,9 @@ func getQueriesFromLightLLM(modelSettings Settings, prompt string, system string
 	client := &http.Client{}
 	schema := jsonschema.Reflect(&QueriesList{})
 
-	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, schema)
+	ctx, cancelLLM := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelLLM()
+	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, schema, ctx)
 	if err != nil {
 		fmt.Println("\nLLM failed:", err)
 	}
@@ -95,7 +97,9 @@ func getLinksFromLightLLM(modelSettings Settings, prompt string, system string) 
 	client := &http.Client{}
 	schema := jsonschema.Reflect(&LinksList{})
 
-	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, schema)
+	ctx, cancelLLM := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelLLM()
+	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, schema, ctx)
 	if err != nil {
 		fmt.Println("\nLLM failed:", err)
 	}
@@ -106,7 +110,10 @@ func getLinksFromLightLLM(modelSettings Settings, prompt string, system string) 
 }
 func callLightLLM(modelSettings Settings, prompt string, system string) *LLMResponse {
 	client := &http.Client{}
-	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, nil)
+	ctx, cancelLLM := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelLLM()
+
+	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, nil, ctx)
 	if err != nil {
 		fmt.Println("\nLLM failed:", err)
 	}
@@ -115,7 +122,10 @@ func callLightLLM(modelSettings Settings, prompt string, system string) *LLMResp
 }
 func callHeavyLLM(modelSettings Settings, prompt string, system string) *LLMResponse {
 	client := &http.Client{}
-	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.HeavyModel, system, prompt, nil)
+	ctx, cancelLLM := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancelLLM()
+
+	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.HeavyModel, system, prompt, nil, ctx)
 	if err != nil {
 		fmt.Println("\nLLM failed:", err)
 	}

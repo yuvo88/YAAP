@@ -118,7 +118,7 @@
 	<script>
 		document.addEventListener('keydown', function(event) {
 		  if (event.altKey && (event.key === 'h' || event.key === 'H')) {
-			  fetch("/get-chat-history")
+			  fetch("/get-full-memory")
 				  .then(response => response.text())
 				  .then(data => {
 					  document.getElementById("chat-area").innerHTML = data;
@@ -127,7 +127,8 @@
 				  .catch(error => {
 					console.error('Error:', error);
 				  });
-				  }
+		  }
+
 		});
 	</script>
 </head>

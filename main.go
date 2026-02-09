@@ -290,8 +290,7 @@ func respondToPrompt(state *State, prompt string) string {
 		state.Memory.Interactions = append(state.Memory.Interactions, ChatInteraction{Question: prompt, Answer: answer.FinalAnswer, Links: answer.Sources})
 	}
 
-	html := adaptForPrettify(markdown.ToHTML([]byte(answer.FinalAnswer), parser.NewWithExtensions(extensions), renderer))
-	return string(html)
+	return toHTML(answer.FinalAnswer)
 }
 
 func cliHandler(state *State) {
@@ -359,10 +358,15 @@ func adaptForPrettify(html []byte) []byte {
 		[]byte(`<pre class="prettyprint lang-$1"><code>`),
 	)
 }
-func webHandler(state *State) {
-	r := gin.Default()
+func toHTML(output string) string {
 	extensions := parser.CommonExtensions
 	renderer := html.NewRenderer(html.RendererOptions{})
+
+	return string(adaptForPrettify(markdown.ToHTML([]byte(output), parser.NewWithExtensions(extensions), renderer)))
+	
+}
+func webHandler(state *State) {
+	r := gin.Default()
 
 	tmpl := template.Must(
 		template.ParseFS(templates, "templates/*.html"),
@@ -374,8 +378,8 @@ func webHandler(state *State) {
 			"answer": "Ask me anything",
 		})
 	})
-	r.GET("/get-chat-history", func(c *gin.Context) {
-		c.String(http.StatusOK, "%s", template.HTML(string(adaptForPrettify(markdown.ToHTML([]byte(state.Memory.GetPrintedMemory(state.Renderer)), parser.NewWithExtensions(extensions), renderer)))))
+	r.GET("/get-full-memory", func(c *gin.Context) {
+		c.String(http.StatusOK, "%s", template.HTML(toHTML(state.Memory.GetPrintedMemory(state.Renderer))))
 	})
 	r.POST("/", func(c *gin.Context) {
 		html := respondToPrompt(state, c.PostForm("value"))

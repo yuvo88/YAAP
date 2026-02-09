@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
+	"embed"
 	"flag"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,6 +21,9 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+//go:embed templates/*
+var templates embed.FS
 
 type Settings struct {
 	HeavyModel string
@@ -309,9 +314,22 @@ func cliHandler(state *State) {
 	}
 }
 
+var codeLangRe = regexp.MustCompile(
+	`<pre><code class="language-([^"]+)">`,
+)
+
+func adaptForPrettify(html []byte) []byte {
+	return codeLangRe.ReplaceAll(
+		html,
+		[]byte(`<pre class="prettyprint lang-$1"><code>`),
+	)
+}
 func webHandler(state *State) {
 	r := gin.Default()
-	r.LoadHTMLGlob("templates/*")
+	tmpl := template.Must(
+		template.ParseFS(templates, "templates/*.html"),
+	)
+	r.SetHTMLTemplate(tmpl)
 
 	r.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "home.html", gin.H{
@@ -321,7 +339,7 @@ func webHandler(state *State) {
 	r.POST("/", func(c *gin.Context) {
 		extensions := parser.CommonExtensions
 		renderer := html.NewRenderer(html.RendererOptions{})
-		html := markdown.ToHTML([]byte(executePrompt(state, c.PostForm("value")).FinalAnswer), parser.NewWithExtensions(extensions), renderer)
+		html := adaptForPrettify(markdown.ToHTML([]byte(executePrompt(state, c.PostForm("value")).FinalAnswer), parser.NewWithExtensions(extensions), renderer))
 
 		c.HTML(http.StatusOK, "home.html", gin.H{
 			"answer": template.HTML(html),

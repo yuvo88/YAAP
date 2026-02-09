@@ -34,12 +34,15 @@ func (self Memory) GetMemoryForModel() string {
 
 	return history.String()
 }
-func (self Memory) PrintMemory(renderer *glamour.TermRenderer) {
+func (self Memory) GetPrintedMemory(renderer *glamour.TermRenderer) string{
+
+	var history strings.Builder
 	for _, interaction := range self.Interactions {
-		fmt.Printf(">>>> %s\n", interaction.Question)
-		markdown, _ := renderer.Render(interaction.Answer)
-		fmt.Println(markdown)
-		fmt.Println(strings.Join(interaction.Links, "\n"))
+		fmt.Fprintf(&history, ">>>> %s\n\n", interaction.Question)
+		fmt.Fprintf(&history, "LLM: %s", interaction.Answer)
+		fmt.Fprintf(&history, "Links: \n%s", strings.Join(interaction.Links, "\n"))
 	}
+
+	return history.String()
 
 }

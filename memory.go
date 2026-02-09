@@ -82,7 +82,7 @@ type MemoryDto struct {
 	Updated int64
 }
 
-func resumeLastMemory(state *State) {
+func resumeLastMemory(state *State) string {
 	state.Logger.Debug("Resuming last memory")
 	row := state.Database.QueryRow("SELECT id FROM memories ORDER BY updated DESC LIMIT 1")
 
@@ -105,10 +105,10 @@ func resumeLastMemory(state *State) {
 		state.Logger.Error("Last memory wasn't found on the disk", slog.Any("err", err))
 	}
 	state.Memory = memory
-	state.Memory.PrintMemory(state.Renderer)
+	return state.Memory.GetPrintedMemory(state.Renderer)
 
 }
-func listMemories(database *sql.DB) {
+func listMemories(database *sql.DB) string {
 	rows, err := database.Query("SELECT * FROM memories ORDER BY updated")
 
 	if err != nil {
@@ -129,18 +129,21 @@ func listMemories(database *sql.DB) {
 	if err := rows.Err(); err != nil {
 		panic(fmt.Sprintf("Empty result from database, err: %s", err))
 	}
+	var memoriesString strings.Builder
+	fmt.Fprintf(&memoriesString, "Memories\n\n")
 	for _, memory := range memories {
 		t := time.Unix(memory.Updated, 0).In(time.Local)
 		title := strings.ReplaceAll(memory.Title, "\n", "\\n")
 		if len(title) > 100 {
 			title = title[:100]
 		}
-		fmt.Printf("%s | %s | %s\n", memory.Id, title, t.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(&memoriesString, "%s | %s | %s\n\n", memory.Id, title, t.Format("2006-01-02 15:04:05"))
 	}
+	return memoriesString.String()
 
 }
 
-func loadMemory(state *State, memoryId string) {
+func loadMemory(state *State, memoryId string) string{
 	state.Logger.Debug("Loading memory", slog.String("memory_id", memoryId))
 	filePath := filepath.Join(memoriesDirectoryName, memoryId)
 	file, _ := os.Open(filePath)
@@ -155,7 +158,7 @@ func loadMemory(state *State, memoryId string) {
 		state.Logger.Warn("Memory not found", slog.String("memory_id", memoryId))
 	}
 	state.Memory = memory
-	state.Memory.PrintMemory(state.Renderer)
+	return state.Memory.GetPrintedMemory(state.Renderer)
 }
 
 func initDb() *sql.DB {

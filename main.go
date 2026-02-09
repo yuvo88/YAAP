@@ -4,12 +4,20 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
+	"html/template"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/html"
+	"github.com/gomarkdown/markdown/parser"
+
+	"github.com/google/uuid"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type Settings struct {
@@ -186,7 +194,7 @@ func executePrompt(state *State, prompt string) FinalAnswer {
 	case Normal:
 		fmt.Println("Answering from memory!")
 		answer := callHeavyLLM(
-			state.Settings,
+			state,
 			buildPrompt(state, prompt, ""),
 			`You answer quickly and accurately using your own abilities.
 				Rules:
@@ -263,6 +271,67 @@ func getPrompt(state *State) string {
 
 }
 
+func cliHandler(state *State) {
+	resultChan := make(chan FinalAnswer)
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		prompt := getPrompt(state)
+		if prompt == "" {
+			continue
+		}
+		if prompt[0] == '/' {
+			commandHandler(state, prompt[1:])
+			continue
+		}
+
+		start := time.Now()
+		go func() {
+			resultChan <- executePrompt(state, prompt)
+		}()
+		answer := elapsedTime(resultChan, ticker, start)
+		if state.Remember {
+			if len(state.Memory.Interactions) == 0 {
+				state.Memory.Title = prompt
+				state.Memory.Id = uuid.New().String()
+			}
+			state.Memory.Interactions = append(state.Memory.Interactions, ChatInteraction{Question: prompt, Answer: answer.FinalAnswer, Links: answer.Sources})
+		}
+
+		out, err := state.Renderer.Render(answer.FinalAnswer)
+		if err != nil {
+			fmt.Println(answer.FinalAnswer)
+		} else {
+			fmt.Println(out)
+		}
+		fmt.Println(strings.Join(answer.Sources, "\n"))
+	}
+}
+
+func webHandler(state *State) {
+	r := gin.Default()
+	r.LoadHTMLGlob("templates/*")
+
+	r.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "home.html", gin.H{
+			"answer": "Ask me anything",
+		})
+	})
+	r.POST("/", func(c *gin.Context) {
+		extensions := parser.CommonExtensions
+		renderer := html.NewRenderer(html.RendererOptions{})
+		html := markdown.ToHTML([]byte(executePrompt(state, c.PostForm("value")).FinalAnswer), parser.NewWithExtensions(extensions), renderer)
+
+		c.HTML(http.StatusOK, "home.html", gin.H{
+			"answer": template.HTML(html),
+		})
+	})
+
+	r.Run("0.0.0.0:12345")
+
+}
+
 func main() {
 	searxUrl := flag.String(
 		"searx-url",
@@ -304,6 +373,11 @@ func main() {
 		"",
 		"Memory id of memory to load from the list of memories. (--list-memories to see memories)",
 	)
+	webServer := flag.Bool(
+		"web-server",
+		false,
+		"Use website",
+	)
 	db := initDb()
 	defer db.Close()
 	flag.Parse()
@@ -334,40 +408,12 @@ func main() {
 	if *resume {
 		resumeLastMemory(state)
 	}
-	resultChan := make(chan FinalAnswer)
 
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-	for {
-		prompt := getPrompt(state)
-		if prompt == "" {
-			continue
-		}
-		if prompt[0] == '/' {
-			commandHandler(state, prompt[1:])
-			continue
-		}
-
-		start := time.Now()
-		go func() {
-			resultChan <- executePrompt(state, prompt)
-		}()
-		answer := elapsedTime(resultChan, ticker, start)
-		if state.Remember {
-			if len(state.Memory.Interactions) == 0 {
-				state.Memory.Title = prompt
-				state.Memory.Id = uuid.New().String()
-			}
-			state.Memory.Interactions = append(state.Memory.Interactions, ChatInteraction{Question: prompt, Answer: answer.FinalAnswer, Links: answer.Sources})
-		}
-
-		out, err := state.Renderer.Render(answer.FinalAnswer)
-		if err != nil {
-			fmt.Println(answer.FinalAnswer)
-		} else {
-			fmt.Println(out)
-		}
-		fmt.Println(strings.Join(answer.Sources, "\n"))
+	if *webServer {
+		state.OperatingMode = Normal
+		webHandler(state)
+	} else {
+		cliHandler(state)
 	}
 }
 
@@ -378,6 +424,5 @@ func getenv(k, def string) string {
 	return def
 }
 
-//TODO: jump to top of response on response
 //TODO: enable memory exporting
 //TODO: auto-complete for inline commands

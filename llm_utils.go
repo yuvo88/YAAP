@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -63,71 +63,56 @@ func ollamaGenerate(client *http.Client, baseURL, model, system string, prompt s
 	return out, nil
 }
 
-func getDecisionFromLightLLM(modelSettings Settings, prompt string, system string) *Decision {
-	client := &http.Client{}
-	schema := jsonschema.Reflect(&Decision{})
-
-	ctx, cancelLLM := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancelLLM()
-	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, "gemma-128k", system, prompt, schema, ctx)
-	if err != nil {
-		fmt.Println("\nLLM failed:", err)
-	}
-	decision := &Decision{}
-	json.Unmarshal([]byte(answer.Response), decision)
-
-	return decision
-}
-func getQueriesFromLightLLM(modelSettings Settings, prompt string, system string) *QueriesList {
+func getQueriesFromLightLLM(state *State, prompt string, system string) *QueriesList {
 	client := &http.Client{}
 	schema := jsonschema.Reflect(&QueriesList{})
 
 	ctx, cancelLLM := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancelLLM()
-	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, schema, ctx)
+	answer, err := ollamaGenerate(client, state.Settings.OllamaUrl, state.Settings.LightModel, system, prompt, schema, ctx)
 	if err != nil {
-		fmt.Println("\nLLM failed:", err)
+		state.Logger.Error("Failed to call LLM", slog.Any("err", err))
 	}
 	queries := &QueriesList{}
 	json.Unmarshal([]byte(answer.Response), queries)
 
 	return queries
 }
-func getLinksFromLightLLM(modelSettings Settings, prompt string, system string) *LinksList {
+func getLinksFromLightLLM(state *State, prompt string, system string) *LinksList {
 	client := &http.Client{}
 	schema := jsonschema.Reflect(&LinksList{})
 
 	ctx, cancelLLM := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancelLLM()
-	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, schema, ctx)
+	answer, err := ollamaGenerate(client, state.Settings.OllamaUrl, state.Settings.LightModel, system, prompt, schema, ctx)
 	if err != nil {
-		fmt.Println("\nLLM failed:", err)
+		state.Logger.Error("Failed to call LLM", slog.Any("err", err))
 	}
 	linksList := &LinksList{}
 	json.Unmarshal([]byte(answer.Response), linksList)
 
 	return linksList
 }
-func callLightLLM(modelSettings Settings, prompt string, system string) *LLMResponse {
+func callLightLLM(state *State, prompt string, system string) *LLMResponse {
 	client := &http.Client{}
 	ctx, cancelLLM := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancelLLM()
 
-	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.LightModel, system, prompt, nil, ctx)
+	answer, err := ollamaGenerate(client, state.Settings.OllamaUrl, state.Settings.LightModel, system, prompt, nil, ctx)
 	if err != nil {
-		fmt.Println("\nLLM failed:", err)
+		state.Logger.Error("Failed to call LLM", slog.Any("err", err))
 	}
 
 	return answer
 }
-func callHeavyLLM(modelSettings Settings, prompt string, system string) *LLMResponse {
+func callHeavyLLM(state *State, prompt string, system string) *LLMResponse {
 	client := &http.Client{}
 	ctx, cancelLLM := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancelLLM()
 
-	answer, err := ollamaGenerate(client, modelSettings.OllamaUrl, modelSettings.HeavyModel, system, prompt, nil, ctx)
+	answer, err := ollamaGenerate(client, state.Settings.OllamaUrl, state.Settings.HeavyModel, system, prompt, nil, ctx)
 	if err != nil {
-		fmt.Println("\nLLM failed:", err)
+		state.Logger.Error("Failed to call LLM", slog.Any("err", err))
 	}
 
 	return answer

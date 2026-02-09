@@ -52,7 +52,7 @@ func getLinks(state *State, client *http.Client, question string) []string {
 	year := time.Now().Year()
 
 	queriesList := getQueriesFromLightLLM(
-		state.Settings,
+		state,
 		buildPrompt(state, question, ""),
 		fmt.Sprintf(`You answer quickly and accurately.
 		Rules:
@@ -77,7 +77,7 @@ func getLinks(state *State, client *http.Client, question string) []string {
 	}
 
 	links := getLinksFromLightLLM(
-		state.Settings,
+		state,
 		buildPrompt(state, question, queries.String()),
 		fmt.Sprintf(
 			`You answer quickly and accurately using the provided markdown web snippets.
@@ -98,7 +98,7 @@ func getLinks(state *State, client *http.Client, question string) []string {
 			continue
 		}
 		result := getLinksFromLightLLM(
-			state.Settings,
+			state,
 			buildPrompt(state, question, getRequest(client, link)),
 			fmt.Sprintf(
 				`You answer quickly and accurately using the provided markdown web snippets.
@@ -132,7 +132,7 @@ func researchMode(state *State, question string) (string, []string) {
 	state.Logger.Debug("Parsing links")
 	for _, article := range links {
 		result := callLightLLM(
-			state.Settings,
+			state,
 			fmt.Sprintf(`
 			[web page]
 			%s
@@ -153,7 +153,7 @@ func researchMode(state *State, question string) (string, []string) {
 	}
 	state.Logger.Debug("Preparing final response")
 	finalAnswer := callHeavyLLM(
-		state.Settings,
+		state,
 		buildPrompt(state, question, toParse.String()),
 		`You answer quickly and accurately using the provided markdown web pages.
 		Rules:
@@ -186,7 +186,7 @@ func codeMode(state *State, question string) (string, []string) {
 	var toParse strings.Builder
 	for _, link := range links {
 		result := callLightLLM(
-			state.Settings,
+			state,
 			fmt.Sprintf(`
 			[web page]
 			%s
@@ -206,7 +206,7 @@ func codeMode(state *State, question string) (string, []string) {
 		fmt.Fprintf(&toParse, "%s", result.Response)
 	}
 	finalAnswer := callHeavyLLM(
-		state.Settings,
+		state,
 		buildPrompt(state, question, toParse.String()),
 		`You answer quickly and accurately using the provided code examples.
 		Rules:
@@ -239,7 +239,7 @@ func lightCodeMode(state *State, question string) (string, []string) {
 		fmt.Fprintf(&toParse, "%s", result)
 	}
 	finalAnswer := callLightLLM(
-		state.Settings,
+		state,
 		fmt.Sprintf(`
 		[web pages]
 		%s
@@ -268,7 +268,7 @@ func lookupMode(state *State, question string) string {
 	year := time.Now().Year()
 	client := &http.Client{}
 	lines := getQueriesFromLightLLM(
-		state.Settings,
+		state,
 		buildPrompt(state, question, ""),
 		fmt.Sprintf(`You answer quickly and accurately.
 		Rules:
@@ -297,7 +297,7 @@ func lookupMode(state *State, question string) string {
 	}
 
 	finalAnswer := callHeavyLLM(
-		state.Settings,
+		state,
 		buildPrompt(state, question, sb.String()),
 		fmt.Sprintf(`You answer quickly and accurately using the provided markdown web snippets.
 		Rules:

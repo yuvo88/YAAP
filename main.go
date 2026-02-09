@@ -394,7 +394,7 @@ func main() {
 	webServer := flag.Bool(
 		"web-server",
 		false,
-		"Use website",
+		"EXPERIMENTAL!! Start webserver",
 	)
 	db := initDb()
 	defer db.Close()

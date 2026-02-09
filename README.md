@@ -5,53 +5,6 @@ This is my personal take on local LLMs, it is meant to create a simple terminal 
 This project is not meant to be a coding agent, it is not meant to automate every part of your life.
 It is meant to create a private, personal and usable ChatGPT like experience with a local model.
 
-## Features
-This is a work in progress and is meant for personal use, and as such I will not promise any features.
-
-### Modes
-A normal LLM chat decides whether to search the web or how hard to think, I think this is suboptimal.
-The user knows what it wants the bot to do the best, modes let you control what and how much of it your model does.
-There are several modes of operation that can be used:
-
-* normal - Just a plain old call to the LLM, no search, no thinking.
-* search - Searches the web and gives the result snippets to the model as context to inform quick, simple and up-to-date queries
-* research - Crawls the web for relavant data
-* fast code - Crawls the web for code snippets and responds only with a code snippet, usually should use none thinking model
-* code - Crawls the web for code snippets and formulates an up-to-date response
-
-Usage:
-In the program
-```
-/mode h
-```
-
-### Memories
-Your local agent remembers your conversations, only if you want it to.
-
-Usage:
-In the program
-```
-/memory h
-```
-
-### Files
-Your local agent has the ability to operate with file context that you give it
-
-Usage:
-In the program
-```
-/file
-```
-
-### All commands
-
-Usage:
-In the program
-```
-/help
-```
-
-
 ## Setup
 
 ### Prerequisits
@@ -109,3 +62,60 @@ you
 want
 !@#
 ```
+
+## Features
+This is a work in progress and is meant for personal use, and as such I will not promise any features.
+
+### Modes
+A normal LLM chat decides whether to search the web or how hard to think, I think this is suboptimal.
+The user knows what it wants the bot to do the best, modes let you control what and how much of it your model does.
+There are several modes of operation that can be used:
+
+* normal - Just a plain old call to the LLM, no search, no thinking.
+* search - Searches the web and gives the result snippets to the model as context to inform quick, simple and up-to-date queries
+* research - Crawls the web for relavant data
+* fast code - Crawls the web for code snippets and responds only with a code snippet, usually should use none thinking model
+* code - Crawls the web for code snippets and formulates an up-to-date response
+
+Usage:
+In the program
+```
+/mode h
+```
+
+### Memories
+Your local agent remembers your conversations, only if you want it to.
+
+Usage:
+In the program
+```
+/memory h
+```
+
+### Files
+Your local agent has the ability to operate with file context that you give it
+
+Usage:
+In the program:
+```
+/file
+```
+
+### Web server **exteremely experimental**
+This is a web server for YAAP, still very experimental but functional. Eventually meant to allow me to replace chatgpt on my phone
+
+Usage:
+To start the webserver:
+```bash
+./YAAP --web-server
+```
+
+### All commands
+
+Usage:
+In the program
+```
+/help
+```
+
+

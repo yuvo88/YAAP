@@ -102,7 +102,9 @@ In the program:
 ```
 
 ### Web server **exteremely experimental**
-This is a web server for YAAP, still very experimental but functional. Eventually meant to allow me to replace chatgpt on my phone
+This is a web application for YAAP, still very experimental but functional. Eventually meant to allow me to replace chatgpt on my phone
+Supports all the normal usage that exists with the normal CLI app, just one caveat, for the sake of keeping the app stupid simple it doesn't
+support conversation history as of yet
 
 Usage:
 To start the webserver:

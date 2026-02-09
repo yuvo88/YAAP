@@ -103,14 +103,17 @@ In the program:
 
 ### Web server **exteremely experimental**
 This is a web application for YAAP, still very experimental but functional. Eventually meant to allow me to replace chatgpt on my phone
-Supports all the normal usage that exists with the normal CLI app, just one caveat, for the sake of keeping the app stupid simple it doesn't
-support conversation history as of yet
-
+Supports all the normal usage that exists with the normal CLI app.
 Usage:
 To start the webserver:
 ```bash
 ./YAAP --web-server
 ```
+
+#### Keybinds
+It is my intent to provide a keybinds to be able to do anything in the webserver instead of clicking buttons
+
+- alt+h load the current full memory
 
 ### All commands
 

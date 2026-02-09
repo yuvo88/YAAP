@@ -39,7 +39,7 @@ func (self Memory) GetPrintedMemory(renderer *glamour.TermRenderer) string{
 	var history strings.Builder
 	for _, interaction := range self.Interactions {
 		fmt.Fprintf(&history, ">>>> %s\n\n", interaction.Question)
-		fmt.Fprintf(&history, "LLM: %s", interaction.Answer)
+		fmt.Fprintf(&history, "LLM: \n\n%s\n\n", interaction.Answer)
 		fmt.Fprintf(&history, "Links: \n%s", strings.Join(interaction.Links, "\n"))
 	}
 

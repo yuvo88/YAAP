@@ -361,6 +361,9 @@ func adaptForPrettify(html []byte) []byte {
 }
 func webHandler(state *State) {
 	r := gin.Default()
+	extensions := parser.CommonExtensions
+	renderer := html.NewRenderer(html.RendererOptions{})
+
 	tmpl := template.Must(
 		template.ParseFS(templates, "templates/*.html"),
 	)
@@ -370,6 +373,9 @@ func webHandler(state *State) {
 		c.HTML(http.StatusOK, "home.html", gin.H{
 			"answer": "Ask me anything",
 		})
+	})
+	r.GET("/get-chat-history", func(c *gin.Context) {
+		c.String(http.StatusOK, "%s", template.HTML(string(adaptForPrettify(markdown.ToHTML([]byte(state.Memory.GetPrintedMemory(state.Renderer)), parser.NewWithExtensions(extensions), renderer)))))
 	})
 	r.POST("/", func(c *gin.Context) {
 		html := respondToPrompt(state, c.PostForm("value"))

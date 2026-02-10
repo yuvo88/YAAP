@@ -116,6 +116,13 @@
         }
 	</style>
 	<script>
+		const Mode = {
+		  RESEARCH: 0,
+		  NORMAL: 1,
+		  SEARCH: 2,
+		  CODE: 3,
+		  FASTCODE: 4
+		};
 		document.addEventListener('keydown', function(event) {
 		  if (event.altKey && (event.key === 'h' || event.key === 'H')) {
 			  fetch("/get-full-memory")
@@ -123,6 +130,21 @@
 				  .then(data => {
 					  document.getElementById("chat-area").innerHTML = data;
 					  PR.prettyPrint();
+				  })
+				  .catch(error => {
+					console.error('Error:', error);
+				  });
+		  }
+		  if (event.altKey && (event.key === 'm' || event.key === 'M')) {
+			  const formData = new FormData();
+			  formData.append("mode", 1)
+			  fetch("/change-mode", {
+				  method: "POST",
+				  body: formData
+			  })
+				  .then(response => response.text())
+				  .then(data => {
+					  console.log("Changed mode")
 				  })
 				  .catch(error => {
 					console.error('Error:', error);

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -363,7 +364,7 @@ func toHTML(output string) string {
 	renderer := html.NewRenderer(html.RendererOptions{})
 
 	return string(adaptForPrettify(markdown.ToHTML([]byte(output), parser.NewWithExtensions(extensions), renderer)))
-	
+
 }
 func webHandler(state *State) {
 	r := gin.Default()
@@ -381,6 +382,14 @@ func webHandler(state *State) {
 	r.GET("/get-full-memory", func(c *gin.Context) {
 		c.String(http.StatusOK, "%s", template.HTML(toHTML(state.Memory.GetPrintedMemory(state.Renderer))))
 	})
+	r.POST("/change-mode", func(c *gin.Context) {
+		mode, err := strconv.Atoi(c.PostForm("mode"))
+		if err != nil {
+			c.String(http.StatusBadRequest, "Bad mode supplied")
+		}
+		state.OperatingMode = OperatingMode(mode)
+	})
+
 	r.POST("/", func(c *gin.Context) {
 		html := respondToPrompt(state, c.PostForm("value"))
 
@@ -487,3 +496,4 @@ func getenv(k, def string) string {
 
 //TODO: enable memory exporting
 //TODO: auto-complete for inline commands
+//TODO: Add mode indicator in the ui

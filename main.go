@@ -524,4 +524,5 @@ func getenv(k, def string) string {
 
 //TODO: enable memory exporting
 //TODO: auto-complete for inline commands
-//TODO: Add mode indicator in the ui
+//TODO: Add dropdown for mode selection for mobile use
+//TODO: Add memory button to see the whole memory for mobile

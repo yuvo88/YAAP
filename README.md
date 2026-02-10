@@ -122,6 +122,11 @@ To start the webserver:
 It is my intent to provide a keybinds to be able to do anything in the webserver instead of clicking buttons
 
 - alt+h load the current full memory
+- alt+n Switch to normal mode
+- alt+s Switch to search mode
+- alt+r Switch to research mode
+- alt+c Switch to code mode
+- alt+f Switch to fast code mode
 
 ### All commands
 

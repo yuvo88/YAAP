@@ -123,6 +123,21 @@
 		  CODE: 3,
 		  FASTCODE: 4
 		};
+		const changeMode = (mode) => {
+			  const formData = new FormData();
+			  formData.append("mode", mode)
+			  fetch("/change-mode", {
+				  method: "POST",
+				  body: formData
+			  })
+				  .then(response => response.text())
+				  .then(data => {
+					  console.log("Changed mode")
+				  })
+				  .catch(error => {
+					console.error('Error:', error);
+				  });
+		}
 		document.addEventListener('keydown', function(event) {
 		  if (event.altKey && (event.key === 'h' || event.key === 'H')) {
 			  fetch("/get-full-memory")
@@ -135,22 +150,21 @@
 					console.error('Error:', error);
 				  });
 		  }
-		  if (event.altKey && (event.key === 'm' || event.key === 'M')) {
-			  const formData = new FormData();
-			  formData.append("mode", 1)
-			  fetch("/change-mode", {
-				  method: "POST",
-				  body: formData
-			  })
-				  .then(response => response.text())
-				  .then(data => {
-					  console.log("Changed mode")
-				  })
-				  .catch(error => {
-					console.error('Error:', error);
-				  });
+		  if (event.altKey && (event.key === 'r' || event.key === 'R')) {
+			changeMode(Mode.RESEARCH);
 		  }
-
+		  if (event.altKey && (event.key === 'n' || event.key === 'N')) {
+			changeMode(Mode.NORMAL);
+		  }
+		  if (event.altKey && (event.key === 's' || event.key === 'S')) {
+			changeMode(Mode.SEARCH);
+		  }
+		  if (event.altKey && (event.key === 'c' || event.key === 'C')) {
+			changeMode(Mode.CODE);
+		  }
+		  if (event.altKey && (event.key === 'f' || event.key === 'F')) {
+			changeMode(Mode.FASTCODE);
+		  }
 		});
 	</script>
 </head>

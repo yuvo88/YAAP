@@ -16,6 +16,14 @@ It is meant to create a private, personal and usable ChatGPT like experience wit
     - qwen3:8b with a context window of 40K as the heavy thinking model
     - gemma3:4b with a context window of 128K as the light thinking model 
    The models can be configured using the flags `--light-model` and `--heavy-model` respectively. You can get different models [here](https://ollama.com/search)
+   It is important to note that ollama defaults every llm to a context window of 4K which is wayyy too little
+   Run the following commands to change that for your models in the ollama window of the models you want to use
+   ```bash
+   /set parameter num_ctx <Number recommended by creator>
+   /save <New model name>
+   ```
+   - Number recommended by creator can be found in Ollama's page for a specific model
+   - New model name is the name you want to save the model preset as
 
 ### Instructions
 

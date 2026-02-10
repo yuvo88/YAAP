@@ -43,6 +43,23 @@ const (
 	FastCode
 )
 
+func (s OperatingMode) String() string {
+	switch s {
+	case Research:
+		return "RESEARCH"
+	case Normal:
+		return "NORMAL"
+	case Search:
+		return "SEARCH"
+	case Code:
+		return "CODE"
+	case FastCode:
+		return "FASTCODE"
+	}
+
+	return fmt.Sprintf("UNKNOWN", int(s))
+}
+
 func memoryHandler(state *State, command string) string {
 	if command == "l" {
 		return listMemories(state.Database)
@@ -103,23 +120,23 @@ func memoryHandler(state *State, command string) string {
 func modeHandler(state *State, command string) string {
 	if command == "r" {
 		state.OperatingMode = Research
-		return "Switched to research mode"
+		return ""
 	}
 	if command == "s" {
 		state.OperatingMode = Search
-		return "Switched to search mode"
+		return ""
 	}
 	if command == "n" {
 		state.OperatingMode = Normal
-		return "Switched to normal mode"
+		return ""
 	}
 	if command == "c" {
 		state.OperatingMode = Code
-		return "Switched to code mode"
+		return ""
 	}
 	if command == "fc" {
 		state.OperatingMode = FastCode
-		return "Switched to fast code mode"
+		return ""
 	}
 	if command == "h" {
 		return `Mode handler help
@@ -243,7 +260,7 @@ func elapsedTime(resultChan chan FinalAnswer, ticker *time.Ticker, start time.Ti
 }
 
 func getPrompt(state *State) string {
-	fmt.Print(">>>> ")
+	fmt.Printf("%s>>>> ", state.OperatingMode.String())
 	reader := bufio.NewReader(os.Stdin)
 	terminator := "!@#"
 
@@ -377,6 +394,7 @@ func webHandler(state *State) {
 	r.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "home.html", gin.H{
 			"answer": "Ask me anything",
+			"mode":   state.OperatingMode.String(),
 		})
 	})
 	r.GET("/get-full-memory", func(c *gin.Context) {
@@ -388,13 +406,23 @@ func webHandler(state *State) {
 			c.String(http.StatusBadRequest, "Bad mode supplied")
 		}
 		state.OperatingMode = OperatingMode(mode)
+
+		c.String(http.StatusOK, state.OperatingMode.String())
 	})
 
 	r.POST("/", func(c *gin.Context) {
 		html := respondToPrompt(state, c.PostForm("value"))
+		if html == "" {
+			c.HTML(http.StatusOK, "home.html", gin.H{
+				"answer": template.HTML(toHTML(state.Memory.Interactions[len(state.Memory.Interactions)-1].Answer)),
+				"mode":   state.OperatingMode.String(),
+			})
+			return
+		}
 
 		c.HTML(http.StatusOK, "home.html", gin.H{
 			"answer": template.HTML(html),
+			"mode":   state.OperatingMode.String(),
 		})
 	})
 

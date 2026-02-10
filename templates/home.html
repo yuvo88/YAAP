@@ -74,6 +74,11 @@
           cursor: pointer;
           font-size: 16px;
         }
+		#mode-indicator {
+          padding: 10px 15px;
+          cursor: pointer;
+          font-size: 16px;
+		}
     
         .chat-messages {
           padding: 10px;
@@ -132,7 +137,7 @@
 			  })
 				  .then(response => response.text())
 				  .then(data => {
-					  console.log("Changed mode")
+					  document.getElementById("mode-indicator").innerHTML = data;
 				  })
 				  .catch(error => {
 					console.error('Error:', error);
@@ -179,6 +184,7 @@
 			</div>
 
 			<form class="chat-form" action="/" method="POST">
+				<div id="mode-indicator">{{.mode}}</div>
 				<input name="value" type="text" class="chat-input w-full p-2 rounded-md border border-gray-600" placeholder="Type your message..." autofocus>
 				<button type="submit" class="chat-send">Send</button>
 			</form>

@@ -7,9 +7,8 @@ services:
     environment:
       - SEARXNG_BASE_URL=http://localhost:8080/
     volumes:
-      - ./searxng/:/etc/searxng/:ro
-      - searxng-data:/etc/searxng
+      - ./searxng/:/etc/searxng/
     restart: unless-stopped
 
-volumes:
-  searxng-data:
+# volumes:
+#   searxng-data:

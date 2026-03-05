@@ -34,12 +34,18 @@ func (self Memory) GetMemoryForModel() string {
 
 	return history.String()
 }
-func (self Memory) GetPrintedMemory(renderer *glamour.TermRenderer) string{
+func (self Memory) GetPrintedMemory(renderer *glamour.TermRenderer) string {
 
 	var history strings.Builder
 	for _, interaction := range self.Interactions {
 		fmt.Fprintf(&history, ">>>> %s\n\n", interaction.Question)
-		fmt.Fprintf(&history, "LLM: \n\n%s\n\n", interaction.Answer)
+		out, err := renderer.Render(interaction.Answer)
+		if err != nil {
+			fmt.Fprintf(&history, "LLM: \n\n%s\n\n", interaction.Answer)
+		} else {
+			fmt.Fprintf(&history, "LLM: \n\n%s\n\n", out)
+		}
+
 		fmt.Fprintf(&history, "Links: \n%s", strings.Join(interaction.Links, "\n"))
 	}
 

@@ -486,7 +486,7 @@ func main() {
 		SearxNGUrl: *searxUrl,
 	}
 	if *shouldListMemories {
-		listMemories(db)
+		fmt.Println(listMemories(db))
 		return
 	}
 	logFile, err := os.OpenFile(".YAAP.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -500,11 +500,11 @@ func main() {
 		return
 	}
 	if *memoryToLoad != "" {
-		loadMemory(state, *memoryToLoad)
+		fmt.Println(loadMemory(state, *memoryToLoad))
 	}
 
 	if *resume {
-		resumeLastMemory(state)
+		fmt.Println(resumeLastMemory(state))
 	}
 
 	if *webServer {
